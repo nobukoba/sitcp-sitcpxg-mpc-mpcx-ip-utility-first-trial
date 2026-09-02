@@ -1,7 +1,7 @@
 CXX ?= g++
 CXXFLAGS ?= -O2 -std=c++17 -Wall -Wextra -Wpedantic
 
-PREFIX ?= /usr/local
+PREFIX ?= $(CURDIR)/install
 BINDIR ?= $(PREFIX)/bin
 DESTDIR ?=
 
