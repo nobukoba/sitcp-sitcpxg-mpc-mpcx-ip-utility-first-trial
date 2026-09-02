@@ -15,29 +15,49 @@ The repository is intended to contain:
 git clone https://github.com/nobukoba/sitcp-sitcpxg-mpc-mpcx-ip-utility-first-trial.git
 cd sitcp-sitcpxg-mpc-mpcx-ip-utility-first-trial
 make
+make install
 ```
 
-The executable is created in `bin/`:
+`make` creates the build executable in `bin/`, and the default `make install` installs it under the current repository:
+
+```text
+./bin/mpc-mpcx-writer
+./install/bin/mpc-mpcx-writer
+```
+
+Run the installed executable with:
 
 ```bash
-./bin/mpc-mpcx-writer --help
+./install/bin/mpc-mpcx-writer --help
 ```
 
-## Install
+## Install prefix
 
-The default installation prefix is `/usr/local`:
+The default installation prefix is:
+
+```text
+$(CURDIR)/install
+```
+
+so no root privileges are required:
 
 ```bash
-sudo make install
+make install
 ```
 
-This installs:
+A different prefix can be specified with `PREFIX`. For a system-wide installation:
+
+```bash
+sudo make install PREFIX=/usr/local
+```
+
+which installs:
 
 ```text
 /usr/local/bin/mpc-mpcx-writer
 ```
 
-A different prefix can be specified with `PREFIX`:
+For a user-local installation:
 
 ```bash
 make install PREFIX=$HOME/.local
@@ -59,8 +79,9 @@ make install DESTDIR=/tmp/package-root PREFIX=/usr/local
 To remove the installed binary:
 
 ```bash
-sudo make uninstall
+make uninstall
 make uninstall PREFIX=$HOME/.local
+sudo make uninstall PREFIX=/usr/local
 ```
 
 ## MPC / MPCX writer
