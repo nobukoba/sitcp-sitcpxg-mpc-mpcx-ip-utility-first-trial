@@ -6,9 +6,11 @@ Experimental C++17 utilities for SiTCP and SiTCP-XG configuration over RBCP.
 
 - `mpc-mpcx-writer` — write MPC/MPCX data to EEPROM, automatically detect MPC/MPCX and target generation, then verify by read-back.
 - `mpc-mpcx-reader` — read EEPROM, automatically detect SiTCP/SiTCP-XG, reconstruct MPC/MPCX information, and show the raw EEPROM image.
-- `mpc-mpcx-command` — advanced inspection, verification, planning, low-level RBCP access, and destructive clear operations.
-- `sitcp-sitcpxg-ip-reader` — read-only IP-oriented inspection. The initial implementation shares the EEPROM decoder with `mpc-mpcx-reader`; runtime-IP reporting will be expanded after register verification.
-- `sitcp-sitcpxg-ip-writer` — command is present, but IP writes are deliberately disabled until EEPROM and current/runtime IP mappings have been verified on both SiTCP generations.
+- `mpc-mpcx-command` — advanced MPC/MPCX inspection, verification, planning, low-level RBCP access, and destructive clear operations.
+- `sitcp-sitcpxg-ip-reader` — SiTCP Utility compatible IP-only reader. This is a separate tool from MPC/MPCX handling.
+- `sitcp-sitcpxg-ip-writer` — SiTCP Utility compatible IP-only writer. This is a separate tool from MPC/MPCX handling.
+
+The IP reader/writer do **not** read, reconstruct, validate, or modify MPC/MPCX license payloads. Their scope is only the SiTCP/SiTCP-XG IP address configuration.
 
 ## Quick start
 
@@ -56,7 +58,7 @@ Default RBCP UDP port is `4660`; default timeout is `3` seconds. The 22-byte pay
 ./bin/mpc-mpcx-reader 192.168.2.161
 ```
 
-The reader is non-destructive and reads/decode the EEPROM image.
+The reader is non-destructive and reads/decodes the MPC/MPCX EEPROM image.
 
 ## MPC / MPCX command
 
@@ -80,32 +82,31 @@ write IP FILE ...
 
 `write` intentionally directs users to the verified `mpc-mpcx-writer` path instead of duplicating the high-level destructive programming implementation. `clear` and `rbcp-write` are destructive low-level operations and should be used carefully.
 
-Examples:
-
-```bash
-./bin/mpc-mpcx-command inspect file.mpcx
-./bin/mpc-mpcx-command verify 192.168.2.169 file.mpcx
-./bin/mpc-mpcx-command probe 192.168.2.169 0xFFFFFF50 1
-./bin/mpc-mpcx-command rbcp-read 192.168.2.169 0xFFFFFC00 8
-```
-
 ## SiTCP / SiTCP-XG IP reader
 
+This is an **IP-only utility**, corresponding to the IP-address function of the SiTCP Utility. It is independent of MPC/MPCX license handling.
+
+Intended behavior:
+
 ```bash
-./bin/sitcp-sitcpxg-ip-reader 192.168.2.161
+./bin/sitcp-sitcpxg-ip-reader CURRENT_IP
 ```
 
-This is currently read-only. Reading and clearly separating current/runtime IP and EEPROM/default IP is the next hardware-verification step.
+It should report the current/runtime IP and the EEPROM/default IP as appropriate for SiTCP/SiTCP-XG. The current placeholder intentionally performs no MPC/MPCX decoding while the exact SiTCP Utility compatible access method is being verified.
 
 ## SiTCP / SiTCP-XG IP writer
 
-The intended interface is:
+This is also an **IP-only utility**. It changes only the SiTCP/SiTCP-XG IP address configuration and must not touch MPC/MPCX license information.
+
+Intended behavior:
 
 ```text
-sitcp-sitcpxg-ip-writer IP NEW_IP [options]
+sitcp-sitcpxg-ip-writer CURRENT_IP NEW_IP [options]
 ```
 
-EEPROM will be the default destination, with an explicit option for current/runtime IP changes. Destructive IP writing is currently disabled until mappings are verified on both generations.
+EEPROM is intended to be the default destination. An explicit option will be used for changing the current/runtime IP. After changing the runtime IP, the utility should reconnect to the new IP and perform read-back verification when supported by the device.
+
+Write support is currently disabled until the exact SiTCP Utility compatible IP access method has been verified for both SiTCP and SiTCP-XG.
 
 ## Build requirements
 
