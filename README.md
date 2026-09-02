@@ -6,6 +6,7 @@ Experimental C++17 utilities for SiTCP and SiTCP-XG configuration over RBCP.
 
 - `mpc-mpcx-writer` — write MPC/MPCX data to EEPROM, automatically detect MPC/MPCX and target generation, then verify by read-back.
 - `mpc-mpcx-reader` — read EEPROM, automatically detect SiTCP/SiTCP-XG, reconstruct MPC/MPCX information, and show the raw EEPROM image.
+- `mpc-mpcx-command` — advanced inspection, verification, planning, low-level RBCP access, and destructive clear operations.
 - `sitcp-sitcpxg-ip-reader` — read-only IP-oriented inspection. The initial implementation shares the EEPROM decoder with `mpc-mpcx-reader`; runtime-IP reporting will be expanded after register verification.
 - `sitcp-sitcpxg-ip-writer` — command is present, but IP writes are deliberately disabled until EEPROM and current/runtime IP mappings have been verified on both SiTCP generations.
 
@@ -18,33 +19,28 @@ make
 make install
 ```
 
-`make` creates all executables under `bin/`. The default `make install` installs them under this checkout:
+The default `make install` installs all five commands under:
+
+```text
+./install/bin/
+```
+
+including:
 
 ```text
 ./install/bin/mpc-mpcx-writer
 ./install/bin/mpc-mpcx-reader
+./install/bin/mpc-mpcx-command
 ./install/bin/sitcp-sitcpxg-ip-reader
 ./install/bin/sitcp-sitcpxg-ip-writer
 ```
 
-No root privileges are needed for the default installation.
-
-## Install prefix
-
-The default is:
-
-```text
-PREFIX=$(CURDIR)/install
-```
-
-For a user-local or system installation:
+The default prefix is `$(CURDIR)/install`. Override it with, for example:
 
 ```bash
 make install PREFIX=$HOME/.local
 sudo make install PREFIX=/usr/local
 ```
-
-`BINDIR` and `DESTDIR` may also be overridden. `make uninstall` accepts the same variables.
 
 ## MPC / MPCX writer
 
@@ -52,21 +48,7 @@ sudo make install PREFIX=/usr/local
 ./bin/mpc-mpcx-writer IP FILE
 ```
 
-Examples:
-
-```bash
-./bin/mpc-mpcx-writer 192.168.2.161 2F20880E6E.mpc
-./bin/mpc-mpcx-writer 192.168.2.169 2F20880E82.mpcx
-```
-
-Default RBCP UDP port is `4660`; default timeout is `3` seconds:
-
-```bash
-./bin/mpc-mpcx-writer 192.168.2.161 file.mpc --timeout 5
-./bin/mpc-mpcx-writer 192.168.2.161 file.mpc --port 4660
-```
-
-The 22-byte payload is classified by content; the filename extension is not used. The target is checked as normal SiTCP or SiTCP-XG before programming. A mismatch is refused. EEPROM write protection is restored and the programmed bytes are verified by read-back.
+Default RBCP UDP port is `4660`; default timeout is `3` seconds. The 22-byte payload is classified by content, not filename extension. Target generation is checked before programming, write protection is restored, and programmed bytes are verified by read-back.
 
 ## MPC / MPCX reader
 
@@ -74,13 +56,38 @@ The 22-byte payload is classified by content; the filename extension is not used
 ./bin/mpc-mpcx-reader 192.168.2.161
 ```
 
-Options:
+The reader is non-destructive and reads/decode the EEPROM image.
+
+## MPC / MPCX command
 
 ```bash
-./bin/mpc-mpcx-reader 192.168.2.161 --port 4660 --timeout 3
+./bin/mpc-mpcx-command --help
 ```
 
-The reader is non-destructive. It reads EEPROM in small chunks, detects the target generation, reconstructs the corresponding 22-byte payload, displays relevant fields, and dumps FC00..FC4F.
+Available subcommands are:
+
+```text
+inspect FILE
+read IP [--port N] [--timeout SEC]
+verify IP FILE [--port N] [--timeout SEC]
+mpcx-plan IP FILE [--port N] [--timeout SEC]
+probe IP ADDRESS [LENGTH] [--port N] [--timeout SEC]
+rbcp-read IP ADDRESS LENGTH [--port N] [--timeout SEC]
+rbcp-write IP ADDRESS HEX-BYTES [--port N] [--timeout SEC]
+clear IP --yes-really-clear [--port N] [--timeout SEC]
+write IP FILE ...
+```
+
+`write` intentionally directs users to the verified `mpc-mpcx-writer` path instead of duplicating the high-level destructive programming implementation. `clear` and `rbcp-write` are destructive low-level operations and should be used carefully.
+
+Examples:
+
+```bash
+./bin/mpc-mpcx-command inspect file.mpcx
+./bin/mpc-mpcx-command verify 192.168.2.169 file.mpcx
+./bin/mpc-mpcx-command probe 192.168.2.169 0xFFFFFF50 1
+./bin/mpc-mpcx-command rbcp-read 192.168.2.169 0xFFFFFC00 8
+```
 
 ## SiTCP / SiTCP-XG IP reader
 
@@ -88,7 +95,7 @@ The reader is non-destructive. It reads EEPROM in small chunks, detects the targ
 ./bin/sitcp-sitcpxg-ip-reader 192.168.2.161
 ```
 
-This is currently read-only. The initial version reports EEPROM-side information through the same verified decoder used by the MPC/MPCX reader. Reading and clearly separating both the current/runtime IP and EEPROM/default IP is the next hardware-verification step.
+This is currently read-only. Reading and clearly separating current/runtime IP and EEPROM/default IP is the next hardware-verification step.
 
 ## SiTCP / SiTCP-XG IP writer
 
@@ -98,9 +105,7 @@ The intended interface is:
 sitcp-sitcpxg-ip-writer IP NEW_IP [options]
 ```
 
-The final design will use EEPROM as the default write destination and provide an explicit option for changing the current/runtime IP. Read-back verification is required; after a runtime IP change the utility should reconnect to the new address and verify it when the device behavior permits.
-
-**Destructive IP writing is currently disabled.** The executable intentionally refuses writes until the exact EEPROM and runtime register mappings have been independently verified for normal SiTCP and SiTCP-XG. See `REVERSE_ENGINEERING.md`.
+EEPROM will be the default destination, with an explicit option for current/runtime IP changes. Destructive IP writing is currently disabled until mappings are verified on both generations.
 
 ## Build requirements
 
@@ -120,13 +125,12 @@ Current targets are Linux, macOS, and WSL.
 ├── README.md
 ├── REVERSE_ENGINEERING.md
 └── src/
+    ├── mpc-mpcx-command.cpp
     ├── mpc-mpcx-reader.cpp
     ├── mpc-mpcx-writer.cpp
     ├── sitcp-sitcpxg-ip-reader.cpp
     └── sitcp-sitcpxg-ip-writer.cpp
 ```
-
-`FOR_DEVELOPERS.md` describes architecture, implementation status, testing, and planned refactoring. `REVERSE_ENGINEERING.md` records the evidence behind the reconstructed MPC/MPCX and EEPROM behavior. `AGENTS.md` records constraints that future development should preserve.
 
 ## Notes
 
