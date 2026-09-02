@@ -299,8 +299,11 @@ std::vector<uint8_t> program(RbcpClient& c, const std::vector<uint8_t>& payload,
 }
 
 void usage(const char* argv0) {
-    std::cerr << "Usage: " << argv0
-              << " <ip> <file> [--port N] [--timeout SEC]\n";
+    std::cerr << "Usage: " << argv0 << " <ip> <file> [options]\n\n"
+              << "Options:\n"
+              << "  --port N       RBCP UDP port (default: " << DEFAULT_PORT << ")\n"
+              << "  --timeout SEC  RBCP timeout in seconds (default: " << DEFAULT_TIMEOUT << ")\n"
+              << "  -h, --help     Show this help\n";
 }
 }
 
