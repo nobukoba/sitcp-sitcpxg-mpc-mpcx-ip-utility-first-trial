@@ -188,7 +188,11 @@ void usage(const char* p) {
               << "  rbcp-read IP ADDRESS LENGTH [--port N] [--timeout SEC]\n"
               << "  rbcp-write IP ADDRESS HEX-BYTES [--port N] [--timeout SEC]\n"
               << "  clear IP --yes-really-clear [--port N] [--timeout SEC]\n"
-              << "  write IP FILE [--port N] [--timeout SEC]  (use mpc-mpcx-writer)\n";
+              << "  write IP FILE [--port N] [--timeout SEC]  (use mpc-mpcx-writer)\n\n"
+              << "Defaults:\n"
+              << "  --port N       RBCP UDP port (default: " << DEFAULT_PORT << ")\n"
+              << "  --timeout SEC  RBCP timeout in seconds (default: " << DEFAULT_TIMEOUT << ")\n"
+              << "  probe LENGTH   bytes to read (default: 1)\n";
 }
 }
 
