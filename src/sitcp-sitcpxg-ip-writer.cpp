@@ -12,7 +12,6 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <vector>
-
 namespace {
 constexpr uint16_t DEFAULT_PORT=4660; constexpr double DEFAULT_TIMEOUT=3.0;
 constexpr uint32_t CURRENT_MAC=0xFFFFFF12u,CURRENT_IP=0xFFFFFF18u,EEPROM_MAC=0xFFFFFC12u,EEPROM_IP=0xFFFFFC18u,EEPROM_WE=0xFFFFFCFFu;
@@ -23,6 +22,6 @@ std::vector<uint8_t>parse_ip(const std::string&s){in_addr a{};if(inet_pton(AF_IN
 std::string ips(const std::vector<uint8_t>&d){return std::to_string(d[0])+"."+std::to_string(d[1])+"."+std::to_string(d[2])+"."+std::to_string(d[3]);}
 std::string mac(const std::vector<uint8_t>&d){std::ostringstream o;o<<std::hex<<std::uppercase<<std::setfill('0');for(size_t i=0;i<d.size();i++){if(i)o<<":";o<<std::setw(2)<<(unsigned)d[i];}return o.str();}
 void show(Client&c){std::cout<<"current MAC  : "<<mac(rr(c,CURRENT_MAC,6))<<"\ncurrent IP   : "<<ips(rr(c,CURRENT_IP,4))<<"\nEEPROM MAC   : "<<mac(rr(c,EEPROM_MAC,6))<<"\nEEPROM IP    : "<<ips(rr(c,EEPROM_IP,4))<<"\n";}
-void usage(const char*p){std::cerr<<"Usage: "<<p<<" CURRENT_IP NEW_IP [--eeprom] [--port N] [--timeout SEC]\n";}
+void usage(const char*p){std::cerr<<"Usage: "<<p<<" CURRENT_IP NEW_IP [options]\n\nOptions:\n  --eeprom      Write EEPROM IP (default)\n  --current     Write current/runtime IP (not enabled yet)\n  --port N      RBCP UDP port (default: "<<DEFAULT_PORT<<")\n  --timeout SEC RBCP timeout in seconds (default: "<<DEFAULT_TIMEOUT<<")\n  -h, --help    Show this help\n";}
 }
 int main(int ac,char**av){try{if(ac<3||(ac==2&&(std::string(av[1])=="-h"||std::string(av[1])=="--help"))){usage(av[0]);return ac<3?2:0;}std::string host=av[1];auto newip=parse_ip(av[2]);uint16_t port=DEFAULT_PORT;double timeout=DEFAULT_TIMEOUT;for(int i=3;i<ac;i++){std::string a=av[i];if(a=="--eeprom"){}else if(a=="--port"&&i+1<ac){auto p=std::stoul(av[++i]);if(!p||p>65535)throw Error("invalid port");port=p;}else if(a=="--timeout"&&i+1<ac){timeout=std::stod(av[++i]);if(timeout<=0)throw Error("timeout must be positive");}else if(a=="--current")throw Error("--current is not enabled yet; current/runtime IP changes need separate verified handling");else throw Error("unknown option: "+a);}Client c(host,port,timeout);std::cout<<"before:\n";show(c);c.write(EEPROM_WE,{0x00});try{c.write(EEPROM_IP,newip);}catch(...){try{c.write(EEPROM_WE,{0xff});}catch(...){}throw;}c.write(EEPROM_WE,{0xff});auto rb=rr(c,EEPROM_IP,4);if(rb!=newip)throw Error("EEPROM IP read-back mismatch");std::cout<<"after:\n";show(c);std::cout<<"written target : EEPROM IP only\nstatus         : WRITE/VERIFY OK\n";return 0;}catch(const std::exception&e){std::cerr<<"ERROR: "<<e.what()<<"\n";return 1;}}
