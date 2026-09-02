@@ -16,6 +16,8 @@ The intended public command set is:
 
 Keep command names, option defaults, and output formatting consistent.
 
+All `--help` / usage output must show the actual default value whenever an option has a default. For example, show `--port N ... (default: 4660)` and `--timeout SEC ... (default: 3)` rather than documenting only the option name. For choice options, explicitly mark the default choice, e.g. `--eeprom ... (default)`.
+
 `mpc-mpcx-command` is the advanced/diagnostic interface for MPC/MPCX and low-level RBCP work. Preserve the subcommands `inspect`, `read`, `verify`, `mpcx-plan`, `probe`, `rbcp-read`, `rbcp-write`, and `clear`. The high-level MPC/MPCX `write` path should continue to use the verified `mpc-mpcx-writer` implementation rather than creating a second divergent programming path.
 
 ## Critical separation: MPC/MPCX vs IP utilities
@@ -26,7 +28,7 @@ The IP utilities are **not** MPC/MPCX utilities.
 - They must not classify, reconstruct, validate, read for presentation, or modify MPC/MPCX license payloads.
 - Do not implement an IP reader by including or wrapping `mpc-mpcx-reader`.
 - Shared low-level RBCP transport code is acceptable, but MPC/MPCX payload logic and IP-setting logic must remain separate modules.
-- The IP reader should ultimately show current/runtime IP and EEPROM/default IP only as required by the SiTCP Utility compatible behavior.
+- The IP reader/writer must always display current MAC, current IP, EEPROM MAC, and EEPROM IP when communicating with a target.
 - The IP writer changes only IP configuration. EEPROM is the default target; current/runtime IP change requires an explicit option.
 - After changing the current/runtime IP, reconnect to the new address and perform read-back verification when the SiTCP/SiTCP-XG behavior supports it.
 
@@ -49,7 +51,7 @@ Default `PREFIX` is `$(CURDIR)/install`, not `/usr/local`. `make install` must w
 
 ## Safety
 
-Do not guess register/protocol mappings for destructive operations. Read-only probes are preferred while reconstructing behavior. IP writing must remain disabled until the exact SiTCP Utility compatible IP-only access method is verified for both normal SiTCP and SiTCP-XG.
+Do not guess register/protocol mappings for destructive operations. Read-only probes are preferred while reconstructing behavior.
 
 `mpc-mpcx-command rbcp-write` and `clear` are intentionally low-level/destructive. Keep explicit command names and the `--yes-really-clear` guard for clear.
 
@@ -69,9 +71,8 @@ Keep these documents synchronized with implementation changes:
 1. Preserve the verified C++ `mpc-mpcx-writer` behavior.
 2. Keep `mpc-mpcx-command` compatible with the previous Python utility's advanced command set.
 3. Keep IP utilities completely independent of MPC/MPCX payload handling.
-4. Reconstruct/verify the SiTCP Utility IP-only read/write mechanism for both SiTCP and SiTCP-XG.
-5. Implement `sitcp-sitcpxg-ip-reader` to show current/runtime and EEPROM/default IP values without touching MPC/MPCX logic.
-6. Implement `sitcp-sitcpxg-ip-writer` with EEPROM as the default and an explicit runtime/current option.
-7. Runtime IP writes should reconnect to the new address for read-back verification when hardware behavior permits it.
-8. Factor truly shared low-level transport code into common modules without merging the two functional domains.
-9. Add CI builds for Linux and macOS.
+4. Keep current/EEPROM MAC and IP reporting available in the IP tools.
+5. Implement and verify EEPROM IP writing as the default operation.
+6. Implement an explicit runtime/current IP option and reconnect to the new address for read-back verification.
+7. Factor truly shared low-level transport code into common modules without merging the two functional domains.
+8. Add CI builds for Linux and macOS.
