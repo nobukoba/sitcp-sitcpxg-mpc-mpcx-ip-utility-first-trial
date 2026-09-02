@@ -7,23 +7,23 @@ DESTDIR ?=
 
 BIN_DIR := bin
 SRC_DIR := src
+PROGRAMS := mpc-mpcx-writer mpc-mpcx-reader sitcp-sitcpxg-ip-reader sitcp-sitcpxg-ip-writer
+TARGETS := $(addprefix $(BIN_DIR)/,$(PROGRAMS))
 
-MPC_MPCX_WRITER := $(BIN_DIR)/mpc-mpcx-writer
-
-all: $(MPC_MPCX_WRITER)
+all: $(TARGETS)
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
-$(MPC_MPCX_WRITER): $(SRC_DIR)/mpc-mpcx-writer.cpp | $(BIN_DIR)
+$(BIN_DIR)/%: $(SRC_DIR)/%.cpp | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $< -o $@
 
 install: all
 	install -d $(DESTDIR)$(BINDIR)
-	install -m 0755 $(MPC_MPCX_WRITER) $(DESTDIR)$(BINDIR)/mpc-mpcx-writer
+	for program in $(PROGRAMS); do install -m 0755 $(BIN_DIR)/$$program $(DESTDIR)$(BINDIR)/$$program; done
 
 uninstall:
-	rm -f $(DESTDIR)$(BINDIR)/mpc-mpcx-writer
+	for program in $(PROGRAMS); do rm -f $(DESTDIR)$(BINDIR)/$$program; done
 
 clean:
 	rm -rf $(BIN_DIR)
