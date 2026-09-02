@@ -23,6 +23,46 @@ The executable is created in `bin/`:
 ./bin/mpc-mpcx-writer --help
 ```
 
+## Install
+
+The default installation prefix is `/usr/local`:
+
+```bash
+sudo make install
+```
+
+This installs:
+
+```text
+/usr/local/bin/mpc-mpcx-writer
+```
+
+A different prefix can be specified with `PREFIX`:
+
+```bash
+make install PREFIX=$HOME/.local
+```
+
+which installs:
+
+```text
+$HOME/.local/bin/mpc-mpcx-writer
+```
+
+`BINDIR` and `DESTDIR` can also be overridden when needed:
+
+```bash
+make install PREFIX=/opt/sitcp
+make install DESTDIR=/tmp/package-root PREFIX=/usr/local
+```
+
+To remove the installed binary:
+
+```bash
+sudo make uninstall
+make uninstall PREFIX=$HOME/.local
+```
+
 ## MPC / MPCX writer
 
 ```bash
