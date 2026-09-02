@@ -32,7 +32,25 @@ Implemented. It validates the 22-byte payload, classifies MPC/MPCX by content, d
 
 ### `mpc-mpcx-reader`
 
-Initial C++ implementation. It reads EEPROM in 8-byte chunks, reconstructs the MPC/MPCX payload according to the detected generation, reports MAC/IP-related EEPROM fields, and prints the raw FC00..FC4F image. It is read-only.
+Initial C++ implementation. It reads EEPROM in 8-byte chunks, reconstructs the MPC/MPCX payload according to the detected generation, reports relevant EEPROM fields, and prints the raw FC00..FC4F image. It is read-only.
+
+### `mpc-mpcx-command`
+
+Advanced/diagnostic C++ interface corresponding to the previous Python utility. Current subcommands are:
+
+```text
+inspect
+read
+verify
+mpcx-plan
+probe
+rbcp-read
+rbcp-write
+clear
+write
+```
+
+`inspect`, `read`, `verify`, `mpcx-plan`, `probe`, and `rbcp-read` are read-only. `rbcp-write` is a raw low-level write operation. `clear` requires `--yes-really-clear` and clears FC00..FC7F while restoring EEPROM write protection. The `write` subcommand intentionally does not implement another high-level programming path; users are directed to `mpc-mpcx-writer` so verified write behavior remains in one implementation.
 
 ### `sitcp-sitcpxg-ip-reader`
 
@@ -84,7 +102,7 @@ First reconstruct both possible payload layouts from EEPROM and classify them. I
 
 ## Refactoring direction
 
-The first-trial implementation intentionally prioritized a working standalone writer. The next structural improvement should extract shared components from the command sources, for example:
+The first-trial implementation intentionally prioritized working standalone executables. The next structural improvement should extract shared components used by writer, reader, and command, for example:
 
 ```text
 src/rbcp.hpp
@@ -95,7 +113,7 @@ src/sitcp_device.hpp
 src/sitcp_device.cpp
 ```
 
-Do this without changing verified behavior.
+Do this without changing verified behavior or CLI compatibility.
 
 ## IP writer design target
 
@@ -113,13 +131,17 @@ Once register behavior is verified:
 At minimum, test:
 
 - C++17 build with GCC and Clang.
+- all five executables are built and installed by `make install`.
+- `mpc-mpcx-command --help` and each subcommand parser.
 - invalid file sizes and invalid MPC/MPCX classifiers.
 - port range and positive timeout validation.
-- target mismatch refusal.
 - timeout and bus-error paths.
-- preservation of FC10..FC11 for XG.
+- `verify` for both MPC and MPCX mappings.
+- `mpcx-plan` preserves FC10..FC11 and never writes.
+- `clear` refuses execution without `--yes-really-clear` and restores protection on errors.
+- preservation of FC10..FC11 for XG writer programming.
 - exact normal-SiTCP FC12..FC17 and FC40..FC4F mapping.
 - write protection restoration on exceptions.
-- byte-for-byte read-back mismatch reporting.
+- byte-for-byte writer read-back mismatch reporting.
 
 Hardware-destructive tests should only be run on devices for which the corresponding MPC/MPCX and configuration are known.
