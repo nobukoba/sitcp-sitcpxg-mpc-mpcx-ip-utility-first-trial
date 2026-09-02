@@ -2,7 +2,12 @@
 
 ## Scope
 
-This repository is a C++17 utility suite for SiTCP / SiTCP-XG configuration through RBCP. It is intentionally dependency-light and currently uses POSIX UDP sockets directly.
+This repository contains two related but functionally separate C++17 utility groups for SiTCP / SiTCP-XG:
+
+1. MPC/MPCX license/configuration utilities.
+2. SiTCP Utility compatible IP-address-only utilities.
+
+They may share low-level transport code, but they must not share domain logic.
 
 ## Build
 
@@ -32,7 +37,7 @@ Implemented. It validates the 22-byte payload, classifies MPC/MPCX by content, d
 
 ### `mpc-mpcx-reader`
 
-Initial C++ implementation. It reads EEPROM in 8-byte chunks, reconstructs the MPC/MPCX payload according to the detected generation, reports relevant EEPROM fields, and prints the raw FC00..FC4F image. It is read-only.
+Initial C++ implementation. It reads EEPROM in 8-byte chunks, reconstructs the MPC/MPCX payload according to the detected generation, reports relevant MPC/MPCX EEPROM fields, and prints the raw FC00..FC4F image. It is read-only.
 
 ### `mpc-mpcx-command`
 
@@ -50,19 +55,44 @@ clear
 write
 ```
 
-`inspect`, `read`, `verify`, `mpcx-plan`, `probe`, and `rbcp-read` are read-only. `rbcp-write` is a raw low-level write operation. `clear` requires `--yes-really-clear` and clears FC00..FC7F while restoring EEPROM write protection. The `write` subcommand intentionally does not implement another high-level programming path; users are directed to `mpc-mpcx-writer` so verified write behavior remains in one implementation.
+`inspect`, `read`, `verify`, `mpcx-plan`, `probe`, and `rbcp-read` are read-only. `rbcp-write` is a raw low-level write operation. `clear` requires `--yes-really-clear`. The `write` subcommand intentionally points users to `mpc-mpcx-writer` so the verified high-level write path remains in one implementation.
 
 ### `sitcp-sitcpxg-ip-reader`
 
-Initial read-only implementation using the same EEPROM/RBCP decoder as `mpc-mpcx-reader`. Keep the separate executable name because the IP-specific presentation and runtime-register reading will evolve independently.
+This is an IP-only SiTCP Utility compatible command. It must not include, wrap, or reuse MPC/MPCX payload decoding. The previous implementation that included `mpc-mpcx-reader.cpp` was incorrect and has been removed.
+
+Current source is intentionally a placeholder until the exact IP-only access method is verified. Final behavior should report the current/runtime IP and EEPROM/default IP, and nothing about MPC/MPCX license payloads.
 
 ### `sitcp-sitcpxg-ip-writer`
 
-Executable exists but destructive write support is deliberately disabled. Do not enable it until both EEPROM and current/runtime IP mappings are verified on normal SiTCP and SiTCP-XG.
+This is an IP-only SiTCP Utility compatible command. It changes only IP configuration. It must never rewrite MPC/MPCX license data as part of the IP operation.
 
-## RBCP implementation
+Current destructive behavior is disabled until the exact IP-only access method is verified for normal SiTCP and SiTCP-XG.
 
-Current wire format:
+## Architectural boundary
+
+Keep these domains separate:
+
+```text
+MPC/MPCX domain:
+  payload classification
+  license/MAC payload reconstruction
+  MPC/MPCX EEPROM layout
+  MPC/MPCX writer/read/verify/clear
+
+IP utility domain:
+  current/runtime IP read
+  EEPROM/default IP read
+  EEPROM IP write
+  optional current/runtime IP write
+  reconnect/read-back after runtime IP change
+```
+
+A common `RbcpClient` or other transport helper may be shared only when the SiTCP Utility IP operation is verified to use that transport. Do not infer that because MPC/MPCX uses RBCP, the IP utility must use the same addresses or layout.
+
+## MPC/MPCX RBCP implementation
+
+Current wire format used by the MPC/MPCX implementation:
 
 ```text
 FF CMD ID LEN ADDR[31:24] ADDR[23:16] ADDR[15:8] ADDR[7:0]
@@ -79,9 +109,9 @@ The reply packet ID must match. Bit 0 in the reply command/status byte is treate
 
 Reads may be retried after timeout. EEPROM writes must not be blindly retried because a missing UDP ACK does not prove that the device failed to perform the write.
 
-## EEPROM MPC/MPCX mappings
+## MPC/MPCX EEPROM mappings
 
-See `REVERSE_ENGINEERING.md` for evidence and details. The implementation currently relies on:
+See `REVERSE_ENGINEERING.md` for evidence and details. Current verified mappings are:
 
 ```text
 SiTCP-XG:
@@ -94,54 +124,55 @@ normal SiTCP:
   payload[6:22]  -> FC40..FC4F
 ```
 
-EEPROM write protection is controlled at `0xFFFFFCFF`, with `0x00` enabling writes and `0xFF` disabling them.
+These mappings belong to MPC/MPCX handling and must not be used as the basis of the IP utility implementation.
 
-## Target detection
+## IP utility design target
 
-First reconstruct both possible payload layouts from EEPROM and classify them. If both appear valid, use the read-only XG probe at `0xFFFFFF50`: readable is treated as SiTCP-XG; an RBCP bus error is treated as normal SiTCP. A timeout remains unresolved.
+Reconstruct the behavior of the SiTCP Utility's IP-address function independently. The intended CLI behavior is:
+
+```text
+sitcp-sitcpxg-ip-reader CURRENT_IP [options]
+sitcp-sitcpxg-ip-writer CURRENT_IP NEW_IP [options]
+```
+
+Requirements:
+
+- reader displays current/runtime IP and EEPROM/default IP as supported by the device;
+- writer changes only IP-related state;
+- EEPROM is the default write destination;
+- an explicit option selects current/runtime IP modification;
+- writer performs read-back verification;
+- after a current/runtime IP change, reconnect to the new IP and verify when possible;
+- automatically handle normal SiTCP and SiTCP-XG where their IP utility behavior differs;
+- do not inspect or modify MPC/MPCX license payloads as part of these commands.
 
 ## Refactoring direction
 
-The first-trial implementation intentionally prioritized working standalone executables. The next structural improvement should extract shared components used by writer, reader, and command, for example:
+Shared low-level pieces may eventually look like:
 
 ```text
 src/rbcp.hpp
 src/rbcp.cpp
 src/mpc_mpcx.hpp
 src/mpc_mpcx.cpp
-src/sitcp_device.hpp
-src/sitcp_device.cpp
+src/sitcp_ip.hpp
+src/sitcp_ip.cpp
 ```
 
-Do this without changing verified behavior or CLI compatibility.
-
-## IP writer design target
-
-Once register behavior is verified:
-
-- EEPROM is the default write destination.
-- Provide an explicit option for changing the current/runtime IP.
-- Reader should show both EEPROM and current/runtime values.
-- Writer must read back and verify.
-- After a runtime IP change, reconnect using the new IP and verify there when possible.
-- Automatic SiTCP/SiTCP-XG detection should remain the default.
+Do not create a generic `sitcp_device` abstraction that silently mixes MPC/MPCX license layout with IP configuration layout.
 
 ## Testing
 
 At minimum, test:
 
-- C++17 build with GCC and Clang.
-- all five executables are built and installed by `make install`.
-- `mpc-mpcx-command --help` and each subcommand parser.
-- invalid file sizes and invalid MPC/MPCX classifiers.
-- port range and positive timeout validation.
-- timeout and bus-error paths.
-- `verify` for both MPC and MPCX mappings.
-- `mpcx-plan` preserves FC10..FC11 and never writes.
-- `clear` refuses execution without `--yes-really-clear` and restores protection on errors.
-- preservation of FC10..FC11 for XG writer programming.
-- exact normal-SiTCP FC12..FC17 and FC40..FC4F mapping.
-- write protection restoration on exceptions.
-- byte-for-byte writer read-back mismatch reporting.
+- C++17 build with GCC and Clang;
+- all five executables are built and installed by `make install`;
+- MPC/MPCX classifier and verified EEPROM mappings remain unchanged;
+- `mpc-mpcx-command` subcommands and safety guards;
+- IP reader output contains only IP-related information;
+- IP writer never modifies MPC/MPCX payload/license areas except where an independently verified SiTCP Utility IP operation explicitly requires a byte that overlaps physically;
+- EEPROM IP write read-back;
+- current/runtime IP change followed by reconnect/read-back;
+- normal SiTCP and SiTCP-XG behavior tested independently.
 
-Hardware-destructive tests should only be run on devices for which the corresponding MPC/MPCX and configuration are known.
+Hardware-destructive tests should only be run after the IP-specific mechanism is independently verified.
