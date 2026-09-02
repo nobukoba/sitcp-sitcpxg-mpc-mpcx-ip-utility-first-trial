@@ -20,7 +20,6 @@ constexpr uint16_t DEFAULT_PORT = 4660;
 constexpr double DEFAULT_TIMEOUT = 3.0;
 constexpr uint32_t EEPROM_BASE = 0xFFFFFC00u;
 constexpr uint32_t EEPROM_WRITE_ENABLE = 0xFFFFFCFFu;
-constexpr uint32_t XG_PROBE_ADDRESS = 0xFFFFFF50u;
 constexpr int FIELD_WIDTH = 20;
 
 struct Error : std::runtime_error { using std::runtime_error::runtime_error; };
@@ -34,6 +33,12 @@ std::string hex_bytes(const std::vector<uint8_t>& data, char sep = ' ') {
         if (i) os << sep;
         os << std::setw(2) << static_cast<unsigned>(data[i]);
     }
+    return os.str();
+}
+
+std::string hex_address(uint32_t address) {
+    std::ostringstream os;
+    os << "0x" << std::hex << std::setw(8) << std::setfill('0') << address;
     return os.str();
 }
 
@@ -211,21 +216,21 @@ int main(int argc, char** argv) {
             if (opt < argc && std::string(argv[opt]).rfind("--",0) != 0) { len = std::stoul(argv[opt++], nullptr, 0); }
             std::vector<std::string> tmp = {argv[0], ip}; for (int i=opt;i<argc;++i) tmp.emplace_back(argv[i]);
             std::vector<char*> av; for (auto& s:tmp) av.push_back(s.data()); auto a = parse_target((int)av.size(), av.data(), 1);
-            auto d = RbcpClient(a.ip,a.port,a.timeout).read(addr,len); field("command","probe"); field("target",a.ip+":"+std::to_string(a.port)); field("address","0x" + static_cast<std::ostringstream&&>(std::ostringstream() << std::hex << addr).str()); field("data",hex_bytes(d)); field("status","RBCP REACHABLE"); return 0;
+            auto d = RbcpClient(a.ip,a.port,a.timeout).read(addr,len); field("command","probe"); field("target",a.ip+":"+std::to_string(a.port)); field("address",hex_address(addr)); field("data",hex_bytes(d)); field("status","RBCP REACHABLE"); return 0;
         }
 
         if (cmd == "rbcp-read") {
             if (argc < 5) throw Error("usage: rbcp-read IP ADDRESS LENGTH");
             const std::string ip=argv[2]; uint32_t addr=parse_u32(argv[3]); size_t len=std::stoul(argv[4],nullptr,0);
             std::vector<std::string> tmp={argv[0],ip}; for(int i=5;i<argc;++i)tmp.emplace_back(argv[i]); std::vector<char*> av;for(auto&s:tmp)av.push_back(s.data());auto a=parse_target((int)av.size(),av.data(),1);
-            auto d=RbcpClient(a.ip,a.port,a.timeout).read(addr,len);field("command","rbcp-read");field("data",hex_bytes(d));return 0;
+            auto d=RbcpClient(a.ip,a.port,a.timeout).read(addr,len);field("command","rbcp-read");field("address",hex_address(addr));field("data",hex_bytes(d));return 0;
         }
 
         if (cmd == "rbcp-write") {
             if (argc < 5) throw Error("usage: rbcp-write IP ADDRESS HEX-BYTES");
             const std::string ip=argv[2];uint32_t addr=parse_u32(argv[3]);auto bytes=parse_hex(argv[4]);
             std::vector<std::string> tmp={argv[0],ip};for(int i=5;i<argc;++i)tmp.emplace_back(argv[i]);std::vector<char*> av;for(auto&s:tmp)av.push_back(s.data());auto a=parse_target((int)av.size(),av.data(),1);
-            auto ack=RbcpClient(a.ip,a.port,a.timeout).write(addr,bytes);(void)ack;field("command","rbcp-write");field("data",hex_bytes(bytes));field("status","WRITE OK");return 0;
+            auto ack=RbcpClient(a.ip,a.port,a.timeout).write(addr,bytes);(void)ack;field("command","rbcp-write");field("address",hex_address(addr));field("data",hex_bytes(bytes));field("status","WRITE OK");return 0;
         }
 
         if (cmd == "verify" || cmd == "mpcx-plan") {
