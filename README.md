@@ -4,13 +4,13 @@ Experimental C++17 utilities for SiTCP and SiTCP-XG configuration over RBCP.
 
 ## Commands
 
-- `mpc-mpcx-writer` — write MPC/MPCX data to EEPROM, automatically detect MPC/MPCX and target generation, then verify by read-back.
-- `mpc-mpcx-reader` — read EEPROM, automatically detect SiTCP/SiTCP-XG, reconstruct MPC/MPCX information, and show the raw EEPROM image.
-- `mpc-mpcx-command` — advanced MPC/MPCX inspection, verification, planning, low-level RBCP access, and destructive clear operations.
-- `sitcp-sitcpxg-ip-reader` — SiTCP Utility compatible IP-only reader. This is a separate tool from MPC/MPCX handling.
-- `sitcp-sitcpxg-ip-writer` — SiTCP Utility compatible IP-only writer. This is a separate tool from MPC/MPCX handling.
+The public command set is now unified into three commands:
 
-The IP reader/writer do **not** read, reconstruct, validate, or modify MPC/MPCX license payloads. Their scope is only the SiTCP/SiTCP-XG IP address configuration.
+- `mpc-mpcx-ip-writer` — write MPC/MPCX EEPROM data and optionally change the IP address.
+- `mpc-mpcx-ip-reader` — read MPC/MPCX information and always display current/EEPROM MAC and IP addresses.
+- `mpc-mpcx-ip-command` — advanced MPC/MPCX, IP, and low-level RBCP operations.
+
+The former `mpc-mpcx-writer`, `mpc-mpcx-reader`, and `mpc-mpcx-command` implementations remain in `src/` as internal legacy implementation units, but they are no longer installed as public commands.
 
 ## Quick start
 
@@ -21,52 +21,76 @@ make
 make install
 ```
 
-The default `make install` installs all five commands under:
+Default installation directory:
 
 ```text
 ./install/bin/
 ```
 
-including:
+Installed commands:
 
 ```text
-./install/bin/mpc-mpcx-writer
-./install/bin/mpc-mpcx-reader
-./install/bin/mpc-mpcx-command
-./install/bin/sitcp-sitcpxg-ip-reader
-./install/bin/sitcp-sitcpxg-ip-writer
+./install/bin/mpc-mpcx-ip-writer
+./install/bin/mpc-mpcx-ip-reader
+./install/bin/mpc-mpcx-ip-command
 ```
 
-The default prefix is `$(CURDIR)/install`. Override it with, for example:
+Default RBCP UDP port is `4660`; default timeout is `3` seconds. These defaults are also shown by `--help`.
+
+## Reader
 
 ```bash
-make install PREFIX=$HOME/.local
-sudo make install PREFIX=/usr/local
+./bin/mpc-mpcx-ip-reader 192.168.2.161
 ```
 
-## MPC / MPCX writer
+The reader always reports:
+
+```text
+current MAC
+current IP
+EEPROM MAC
+EEPROM IP
+```
+
+and then reads/decodes the MPC/MPCX EEPROM information.
+
+## Writer
+
+Write only MPC/MPCX information:
 
 ```bash
-./bin/mpc-mpcx-writer IP FILE
+./bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx
 ```
 
-Default RBCP UDP port is `4660`; default timeout is `3` seconds. The 22-byte payload is classified by content, not filename extension. Target generation is checked before programming, write protection is restored, and programmed bytes are verified by read-back.
-
-## MPC / MPCX reader
+Change only the EEPROM IP address:
 
 ```bash
-./bin/mpc-mpcx-reader 192.168.2.161
+./bin/mpc-mpcx-ip-writer 192.168.2.161 --set-ip 192.168.2.170
 ```
 
-The reader is non-destructive and reads/decodes the MPC/MPCX EEPROM image.
-
-## MPC / MPCX command
+Write MPC/MPCX information and also change the EEPROM IP:
 
 ```bash
-./bin/mpc-mpcx-command --help
+./bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx --set-ip 192.168.2.170
 ```
 
-Available subcommands are:
+Change the current/runtime IP instead of EEPROM:
+
+```bash
+./bin/mpc-mpcx-ip-writer 192.168.2.161 --set-ip 192.168.2.170 --current
+```
+
+EEPROM is the default IP destination. `--eeprom` can be given explicitly. For a current/runtime IP change, the writer does not blindly retry a timed-out destructive write; it reconnects to `NEW_IP` and verifies the current IP there.
+
+The writer displays current/EEPROM MAC and IP values before and after the operation. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
+
+## Advanced command
+
+```bash
+./bin/mpc-mpcx-ip-command --help
+```
+
+Important subcommands include:
 
 ```text
 inspect FILE
@@ -77,36 +101,11 @@ probe IP ADDRESS [LENGTH] [--port N] [--timeout SEC]
 rbcp-read IP ADDRESS LENGTH [--port N] [--timeout SEC]
 rbcp-write IP ADDRESS HEX-BYTES [--port N] [--timeout SEC]
 clear IP --yes-really-clear [--port N] [--timeout SEC]
-write IP FILE ...
+ip-read IP [--port N] [--timeout SEC]
+ip-write CURRENT_IP NEW_IP [--eeprom|--current] [--port N] [--timeout SEC]
 ```
 
-`write` intentionally directs users to the verified `mpc-mpcx-writer` path instead of duplicating the high-level destructive programming implementation. `clear` and `rbcp-write` are destructive low-level operations and should be used carefully.
-
-## SiTCP / SiTCP-XG IP reader
-
-This is an **IP-only utility**, corresponding to the IP-address function of the SiTCP Utility. It is independent of MPC/MPCX license handling.
-
-Intended behavior:
-
-```bash
-./bin/sitcp-sitcpxg-ip-reader CURRENT_IP
-```
-
-It should report the current/runtime IP and the EEPROM/default IP as appropriate for SiTCP/SiTCP-XG. The current placeholder intentionally performs no MPC/MPCX decoding while the exact SiTCP Utility compatible access method is being verified.
-
-## SiTCP / SiTCP-XG IP writer
-
-This is also an **IP-only utility**. It changes only the SiTCP/SiTCP-XG IP address configuration and must not touch MPC/MPCX license information.
-
-Intended behavior:
-
-```text
-sitcp-sitcpxg-ip-writer CURRENT_IP NEW_IP [options]
-```
-
-EEPROM is intended to be the default destination. An explicit option will be used for changing the current/runtime IP. After changing the runtime IP, the utility should reconnect to the new IP and perform read-back verification when supported by the device.
-
-Write support is currently disabled until the exact SiTCP Utility compatible IP access method has been verified for both SiTCP and SiTCP-XG.
+`read` also displays current/EEPROM MAC and IP information. `ip-read` provides only the network configuration view. `ip-write` defaults to EEPROM and accepts `--current` for the runtime/current address.
 
 ## Build requirements
 
@@ -114,25 +113,20 @@ Write support is currently disabled until the exact SiTCP Utility compatible IP 
 - POSIX sockets
 - `make`
 
-Current targets are Linux, macOS, and WSL.
+Targets are Linux, macOS, and WSL.
 
-## Repository layout
+## Implementation notes
+
+The public unified commands use shared IP configuration code in `src/ip-config.hpp`. MPC/MPCX payload handling and IP register handling remain logically separated internally even though they are exposed through the same command-line utilities.
+
+IP/MAC register addresses used by the implementation are:
 
 ```text
-.
-├── AGENTS.md
-├── FOR_DEVELOPERS.md
-├── Makefile
-├── README.md
-├── REVERSE_ENGINEERING.md
-└── src/
-    ├── mpc-mpcx-command.cpp
-    ├── mpc-mpcx-reader.cpp
-    ├── mpc-mpcx-writer.cpp
-    ├── sitcp-sitcpxg-ip-reader.cpp
-    └── sitcp-sitcpxg-ip-writer.cpp
+current MAC : 0xFFFFFF12..0xFFFFFF17
+current IP  : 0xFFFFFF18..0xFFFFFF1B
+EEPROM MAC  : 0xFFFFFC12..0xFFFFFC17
+EEPROM IP   : 0xFFFFFC18..0xFFFFFC1B
+EEPROM WE   : 0xFFFFFCFF
 ```
-
-## Notes
 
 This is an experimental implementation and is not an official Bee Beans Technologies utility. Proprietary executables, libraries, and user-specific MPC/MPCX files are not included.
