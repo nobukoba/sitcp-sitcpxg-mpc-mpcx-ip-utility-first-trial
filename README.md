@@ -4,13 +4,13 @@ Experimental C++17 utilities for SiTCP and SiTCP-XG configuration over RBCP.
 
 ## Commands
 
-The public command set is now unified into three commands:
+The public command set is unified into three commands:
 
-- `mpc-mpcx-ip-writer` — write MPC/MPCX EEPROM data and optionally change the IP address.
+- `mpc-mpcx-ip-writer` — write MPC/MPCX EEPROM data and optionally change EEPROM/current IP addresses.
 - `mpc-mpcx-ip-reader` — read MPC/MPCX information and always display current/EEPROM MAC and IP addresses.
 - `mpc-mpcx-ip-command` — advanced MPC/MPCX, IP, and low-level RBCP operations.
 
-The former `mpc-mpcx-writer`, `mpc-mpcx-reader`, and `mpc-mpcx-command` implementations remain in `src/` as internal legacy implementation units, but they are no longer installed as public commands.
+The former `mpc-mpcx-writer`, `mpc-mpcx-reader`, and `mpc-mpcx-command` implementations remain in `src/` as internal implementation units, but they are no longer installed as public commands.
 
 ## Quick start
 
@@ -56,31 +56,51 @@ and then reads/decodes the MPC/MPCX EEPROM information.
 
 ## Writer
 
-Write only MPC/MPCX information:
+The MPC/MPCX file is a required positional argument:
+
+```text
+mpc-mpcx-ip-writer CURRENT_IP MPC_OR_MPCX_FILE [options]
+```
+
+Write MPC/MPCX information only:
 
 ```bash
 ./bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx
 ```
 
-Change only the EEPROM IP address:
+Write MPC/MPCX information and also set the EEPROM/default IP:
 
 ```bash
-./bin/mpc-mpcx-ip-writer 192.168.2.161 --set-ip 192.168.2.170
+./bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx \
+  --set-eeprom-ip 192.168.2.170
 ```
 
-Write MPC/MPCX information and also change the EEPROM IP:
+Write MPC/MPCX information and also set the current/runtime IP:
 
 ```bash
-./bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx --set-ip 192.168.2.170
+./bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx \
+  --set-current-ip 192.168.2.170
 ```
 
-Change the current/runtime IP instead of EEPROM:
+Set both EEPROM/default and current/runtime IP addresses:
 
 ```bash
-./bin/mpc-mpcx-ip-writer 192.168.2.161 --set-ip 192.168.2.170 --current
+./bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx \
+  --set-eeprom-ip 192.168.2.170 \
+  --set-current-ip 192.168.2.170
 ```
 
-EEPROM is the default IP destination. `--eeprom` can be given explicitly. For a current/runtime IP change, the writer does not blindly retry a timed-out destructive write; it reconnects to `NEW_IP` and verifies the current IP there.
+Writer options:
+
+```text
+--set-eeprom-ip IP   Set EEPROM/default IP address
+--set-current-ip IP  Set current/runtime IP address
+--port N             RBCP UDP port (default: 4660)
+--timeout SEC        RBCP timeout in seconds (default: 3)
+-h, --help           Show help
+```
+
+When both IP options are given, EEPROM IP is written first and current/runtime IP is changed last. This keeps the original address reachable until all operations that require it have finished. After a current/runtime IP change, the writer reconnects to the new IP and performs read-back verification. It does not blindly retry a timed-out destructive current-IP write because the address may already have changed before the acknowledgement is received.
 
 The writer displays current/EEPROM MAC and IP values before and after the operation. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
 
@@ -114,6 +134,10 @@ ip-write CURRENT_IP NEW_IP [--eeprom|--current] [--port N] [--timeout SEC]
 - `make`
 
 Targets are Linux, macOS, and WSL.
+
+## Source formatting
+
+Source files should use conventional readable C++ formatting. Avoid compressed one-line implementations; put control-flow blocks and logically separate statements on separate lines. Long expressions should be wrapped rather than packed into a single line.
 
 ## Implementation notes
 
