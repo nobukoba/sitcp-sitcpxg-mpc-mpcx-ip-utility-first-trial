@@ -14,7 +14,26 @@ The intended public command set is:
 
 The older `mpc-mpcx-writer`, `mpc-mpcx-reader`, and `mpc-mpcx-command` sources may remain as internal implementation units while the unified commands are being refactored, but they are not the public installed names.
 
-Keep command names, option defaults, and output formatting consistent. All `--help` / usage output must show the actual default value whenever an option has a default. For example, show `--port N ... (default: 4660)` and `--timeout SEC ... (default: 3)`. For choice options, explicitly mark the default choice, e.g. EEPROM as the default IP write destination.
+Keep command names, option defaults, and output formatting consistent. All `--help` / usage output must show the actual default value whenever an option has a default. For example, show `--port N ... (default: 4660)` and `--timeout SEC ... (default: 3)`.
+
+## Writer CLI
+
+The high-level writer requires an MPC/MPCX file:
+
+```text
+mpc-mpcx-ip-writer CURRENT_IP MPC_OR_MPCX_FILE [options]
+```
+
+IP rewriting is optional and uses explicit destination-specific options:
+
+- `--set-eeprom-ip IP` sets the EEPROM/default IP address.
+- `--set-current-ip IP` sets the current/runtime IP address.
+- Do not replace these with an ambiguous `--set-ip` plus a separate destination switch.
+- Both IP options may be specified in one invocation.
+- When both are specified, perform EEPROM IP writing before current/runtime IP writing so the original address remains reachable until the final network-address-changing operation.
+- After changing current/runtime IP, reconnect to the new address and perform read-back verification.
+
+The writer must always program/verify the supplied MPC/MPCX file. IP-only operation through `mpc-mpcx-ip-writer` is not part of the public CLI.
 
 ## Unified CLI, separated internals
 
@@ -25,15 +44,23 @@ MPC/MPCX payload handling and SiTCP IP-register handling are exposed through the
 - IP/MAC register reads must not modify or reinterpret MPC/MPCX license payloads.
 - The reader must always display current MAC, current IP, EEPROM MAC, and EEPROM IP.
 - The writer must display those four values before and after the operation whenever the target remains reachable.
-- IP rewriting is optional. Use `--set-ip NEW_IP`; EEPROM is the default destination and `--current` explicitly selects current/runtime IP.
-- IP-only operation must be supported without requiring an MPC/MPCX file.
-- After changing current/runtime IP, reconnect to the new address and perform read-back verification.
 
 ## Advanced command
 
-`mpc-mpcx-ip-command` is the advanced/diagnostic interface. Preserve the MPC/MPCX and low-level RBCP subcommands `inspect`, `read`, `verify`, `mpcx-plan`, `probe`, `rbcp-read`, `rbcp-write`, and `clear`, and also provide `ip-read` and `ip-write`.
+`mpc-mpcx-ip-command` is the advanced/diagnostic interface. Preserve the MPC/MPCX and low-level RBCP subcommands `inspect`, `read`, `verify`, `mpcx-plan`, `probe`, `rbcp-read`, `rbcp-write`, and `clear`, and also provide IP read/write operations.
 
 The high-level MPC/MPCX programming path should continue to use the verified writer implementation rather than creating a second divergent destructive programming path.
+
+## Source formatting
+
+Keep C++ source readable and conventionally formatted.
+
+- Do not compress multiple control-flow statements, declarations, or operations onto one long line.
+- Put function bodies, `if`/`else` branches, loops, and exception handling on normal separate lines.
+- Wrap long expressions and argument lists with consistent indentation.
+- Prefer descriptive local variable names in public/refactored code over single-letter names except for small conventional loop indices.
+- Existing compressed legacy code should be reformatted as it is touched.
+- New code must not introduce minified or one-line C++ formatting.
 
 ## Compatibility rules
 
@@ -84,7 +111,8 @@ Keep these documents synchronized with implementation changes:
 1. Preserve verified MPC/MPCX EEPROM programming behavior.
 2. Keep IP/MAC handling independent internally while exposing it through the unified CLI.
 3. Always report current/EEPROM MAC and IP in the reader and around writer operations.
-4. Keep EEPROM as the default IP write destination and `--current` explicit.
+4. Keep `--set-eeprom-ip` and `--set-current-ip` explicit and independent.
 5. Reconnect to a newly assigned runtime IP for read-back verification.
 6. Refactor temporary wrapper/include structure into shared implementation modules when stable.
-7. Add CI builds for Linux and macOS.
+7. Reformat compressed legacy C++ as it is touched and keep new code readable.
+8. Add CI builds for Linux and macOS.
