@@ -1,14 +1,16 @@
 # SiTCP / SiTCP-XG MPC / MPCX / IP Utility (first trial)
 
-Experimental C++17 utilities for SiTCP and SiTCP-XG configuration over RBCP.
+Experimental C++11 utilities for SiTCP and SiTCP-XG configuration over RBCP.
 
 ## Commands
 
-The public command set is unified into three commands:
+The installed command set contains five commands:
 
 - `mpc-mpcx-ip-writer` — write MPC/MPCX EEPROM data and optionally change EEPROM/current IP addresses.
 - `mpc-mpcx-ip-reader` — read MPC/MPCX information and always display current/EEPROM MAC and IP addresses.
 - `mpc-mpcx-ip-command` — advanced MPC/MPCX, IP, and low-level RBCP operations.
+- `sitcp-sitcpxg-ip-writer` — IP-only writer for SiTCP / SiTCP-XG.
+- `sitcp-sitcpxg-ip-reader` — IP-only reader for SiTCP / SiTCP-XG.
 
 The former `mpc-mpcx-writer`, `mpc-mpcx-reader`, and `mpc-mpcx-command` implementations remain in `src/` as internal implementation units, but they are no longer installed as public commands.
 
@@ -33,6 +35,8 @@ Installed commands:
 ./install/bin/mpc-mpcx-ip-writer
 ./install/bin/mpc-mpcx-ip-reader
 ./install/bin/mpc-mpcx-ip-command
+./install/bin/sitcp-sitcpxg-ip-writer
+./install/bin/sitcp-sitcpxg-ip-reader
 ```
 
 Default RBCP UDP port is `4660`; default timeout is `3` seconds. These defaults are also shown by `--help`.
@@ -104,6 +108,17 @@ When both IP options are given, EEPROM IP is written first and current/runtime I
 
 The writer displays current/EEPROM MAC and IP values before and after the operation. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
 
+## IP-only commands
+
+Use these when only SiTCP / SiTCP-XG IP configuration is needed and no MPC/MPCX file should be involved:
+
+```bash
+./bin/sitcp-sitcpxg-ip-reader 192.168.2.161
+./bin/sitcp-sitcpxg-ip-writer 192.168.2.161 192.168.2.170
+```
+
+The IP-only commands share the low-level IP register helper but do not read or rewrite MPC/MPCX payload data.
+
 ## Advanced command
 
 ```bash
@@ -129,11 +144,11 @@ ip-write CURRENT_IP NEW_IP [--eeprom|--current] [--port N] [--timeout SEC]
 
 ## Build requirements
 
-- C++17 compiler (`g++` or `clang++`)
+- C++11 compiler (`g++` or `clang++`)
 - POSIX sockets
 - `make`
 
-Targets are Linux, macOS, and WSL.
+The default build uses `-std=c++11`. Targets are Linux, macOS, and WSL.
 
 ## Source formatting
 
@@ -141,7 +156,7 @@ Source files should use conventional readable C++ formatting. Avoid compressed o
 
 ## Implementation notes
 
-The public unified commands use shared IP configuration code in `src/ip-config.hpp`. MPC/MPCX payload handling and IP register handling remain logically separated internally even though they are exposed through the same command-line utilities.
+The public commands use shared IP configuration code in `src/ip-config.hpp`. MPC/MPCX payload handling and IP register handling remain logically separated internally even though some commands expose both functions.
 
 IP/MAC register addresses used by the implementation are:
 
