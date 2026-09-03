@@ -4,8 +4,6 @@
 #include "mpc-mpcx-writer.cpp"
 #undef main
 
-#include <optional>
-
 namespace {
 
 void unified_usage(const char* program) {
@@ -41,8 +39,10 @@ int main(int argc, char** argv) {
         const std::string host = argv[1];
         const std::string file = argv[2];
 
-        std::optional<std::string> eeprom_ip;
-        std::optional<std::string> current_ip;
+        bool has_eeprom_ip = false;
+        bool has_current_ip = false;
+        std::string eeprom_ip;
+        std::string current_ip;
         uint16_t port = ipconfig::DEFAULT_PORT;
         double timeout = ipconfig::DEFAULT_TIMEOUT;
 
@@ -51,12 +51,14 @@ int main(int argc, char** argv) {
 
             if (option == "--set-eeprom-ip" && i + 1 < argc) {
                 eeprom_ip = argv[++i];
-                (void)ipconfig::parse_ipv4(*eeprom_ip);
+                has_eeprom_ip = true;
+                (void)ipconfig::parse_ipv4(eeprom_ip);
             } else if (option == "--set-current-ip" && i + 1 < argc) {
                 current_ip = argv[++i];
-                (void)ipconfig::parse_ipv4(*current_ip);
+                has_current_ip = true;
+                (void)ipconfig::parse_ipv4(current_ip);
             } else if (option == "--port" && i + 1 < argc) {
-                const auto value = std::stoul(argv[++i]);
+                const unsigned long value = std::stoul(argv[++i]);
                 if (value == 0 || value > 65535) {
                     throw std::runtime_error("invalid port");
                 }
@@ -77,37 +79,37 @@ int main(int argc, char** argv) {
         std::cout << "before:\n";
         ipconfig::show_all(host, port, timeout, "  ");
 
-        std::vector<std::string> writer_args = {
-            argv[0],
-            host,
-            file,
-            "--port",
-            std::to_string(port),
-            "--timeout",
-            std::to_string(timeout),
-        };
+        std::vector<std::string> writer_args;
+        writer_args.push_back(argv[0]);
+        writer_args.push_back(host);
+        writer_args.push_back(file);
+        writer_args.push_back("--port");
+        writer_args.push_back(std::to_string(port));
+        writer_args.push_back("--timeout");
+        writer_args.push_back(std::to_string(timeout));
 
         std::vector<char*> writer_argv;
-        for (auto& argument : writer_args) {
-            writer_argv.push_back(argument.data());
+        for (std::vector<std::string>::iterator it = writer_args.begin();
+             it != writer_args.end(); ++it) {
+            writer_argv.push_back(&(*it)[0]);
         }
 
         const int writer_result = mpc_mpcx_writer_legacy_main(
-            static_cast<int>(writer_argv.size()), writer_argv.data());
+            static_cast<int>(writer_argv.size()), &writer_argv[0]);
         if (writer_result != 0) {
             return writer_result;
         }
 
-        if (eeprom_ip) {
-            std::cout << "EEPROM IP operation : " << *eeprom_ip << '\n';
-            ipconfig::write_eeprom_ip(host, *eeprom_ip, port, timeout);
+        if (has_eeprom_ip) {
+            std::cout << "EEPROM IP operation : " << eeprom_ip << '\n';
+            ipconfig::write_eeprom_ip(host, eeprom_ip, port, timeout);
         }
 
         std::string final_host = host;
-        if (current_ip) {
-            std::cout << "current IP operation: " << *current_ip << '\n';
-            ipconfig::write_current_ip(host, *current_ip, port, timeout);
-            final_host = *current_ip;
+        if (has_current_ip) {
+            std::cout << "current IP operation: " << current_ip << '\n';
+            ipconfig::write_current_ip(host, current_ip, port, timeout);
+            final_host = current_ip;
         }
 
         std::cout << "after:\n";
