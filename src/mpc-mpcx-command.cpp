@@ -126,12 +126,13 @@ private:
         fd_set read_fds;
         FD_ZERO(&read_fds);
         FD_SET(fd, &read_fds);
-        timeval tv{
-            static_cast<long>(timeout_),
-            static_cast<long>((timeout_ - static_cast<long>(timeout_)) * 1000000.0),
-        };
 
-        const int rv = select(fd + 1, &read_fds, nullptr, nullptr, &tv);
+        timeval timeout_value{};
+        timeout_value.tv_sec = static_cast<decltype(timeout_value.tv_sec)>(timeout_);
+        timeout_value.tv_usec = static_cast<decltype(timeout_value.tv_usec)>(
+            (timeout_ - static_cast<long>(timeout_)) * 1000000.0);
+
+        const int rv = select(fd + 1, &read_fds, nullptr, nullptr, &timeout_value);
         if (rv == 0) {
             close(fd);
             throw Timeout("RBCP timeout");
