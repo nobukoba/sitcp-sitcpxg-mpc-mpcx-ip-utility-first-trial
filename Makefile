@@ -1,5 +1,5 @@
 CXX ?= g++
-CXXFLAGS ?= -O2 -std=c++17 -Wall -Wextra -Wpedantic
+CXXFLAGS ?= -O2 -std=c++11 -Wall -Wextra -Wpedantic
 
 PREFIX ?= $(CURDIR)/install
 BINDIR ?= $(PREFIX)/bin
