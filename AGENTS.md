@@ -4,39 +4,42 @@
 
 Provide small C++17 command-line utilities for SiTCP and SiTCP-XG configuration over RBCP, without requiring the official Windows GUI or Python at runtime.
 
-## Commands
+## Public commands
 
 The intended public command set is:
 
-- `mpc-mpcx-writer`
-- `mpc-mpcx-reader`
-- `mpc-mpcx-command`
-- `sitcp-sitcpxg-ip-reader`
-- `sitcp-sitcpxg-ip-writer`
+- `mpc-mpcx-ip-writer`
+- `mpc-mpcx-ip-reader`
+- `mpc-mpcx-ip-command`
 
-Keep command names, option defaults, and output formatting consistent.
+The older `mpc-mpcx-writer`, `mpc-mpcx-reader`, and `mpc-mpcx-command` sources may remain as internal implementation units while the unified commands are being refactored, but they are not the public installed names.
 
-All `--help` / usage output must show the actual default value whenever an option has a default. For example, show `--port N ... (default: 4660)` and `--timeout SEC ... (default: 3)` rather than documenting only the option name. For choice options, explicitly mark the default choice, e.g. `--eeprom ... (default)`.
+Keep command names, option defaults, and output formatting consistent. All `--help` / usage output must show the actual default value whenever an option has a default. For example, show `--port N ... (default: 4660)` and `--timeout SEC ... (default: 3)`. For choice options, explicitly mark the default choice, e.g. EEPROM as the default IP write destination.
 
-`mpc-mpcx-command` is the advanced/diagnostic interface for MPC/MPCX and low-level RBCP work. Preserve the subcommands `inspect`, `read`, `verify`, `mpcx-plan`, `probe`, `rbcp-read`, `rbcp-write`, and `clear`. The high-level MPC/MPCX `write` path should continue to use the verified `mpc-mpcx-writer` implementation rather than creating a second divergent programming path.
+## Unified CLI, separated internals
 
-## Critical separation: MPC/MPCX vs IP utilities
+MPC/MPCX payload handling and SiTCP IP-register handling are exposed through the same public commands, but must remain logically separated internally.
 
-The IP utilities are **not** MPC/MPCX utilities.
+- Shared IP register logic lives in `src/ip-config.hpp` or a future equivalent shared module.
+- MPC/MPCX payload classification/reconstruction must not be used to determine IP/MAC values.
+- IP/MAC register reads must not modify or reinterpret MPC/MPCX license payloads.
+- The reader must always display current MAC, current IP, EEPROM MAC, and EEPROM IP.
+- The writer must display those four values before and after the operation whenever the target remains reachable.
+- IP rewriting is optional. Use `--set-ip NEW_IP`; EEPROM is the default destination and `--current` explicitly selects current/runtime IP.
+- IP-only operation must be supported without requiring an MPC/MPCX file.
+- After changing current/runtime IP, reconnect to the new address and perform read-back verification.
 
-- `sitcp-sitcpxg-ip-reader` and `sitcp-sitcpxg-ip-writer` correspond only to the IP-address functionality of the SiTCP Utility.
-- They must not classify, reconstruct, validate, read for presentation, or modify MPC/MPCX license payloads.
-- Do not implement an IP reader by including or wrapping `mpc-mpcx-reader`.
-- Shared low-level RBCP transport code is acceptable, but MPC/MPCX payload logic and IP-setting logic must remain separate modules.
-- The IP reader/writer must always display current MAC, current IP, EEPROM MAC, and EEPROM IP when communicating with a target.
-- The IP writer changes only IP configuration. EEPROM is the default target; current/runtime IP change requires an explicit option.
-- After changing the current/runtime IP, reconnect to the new address and perform read-back verification when the SiTCP/SiTCP-XG behavior supports it.
+## Advanced command
+
+`mpc-mpcx-ip-command` is the advanced/diagnostic interface. Preserve the MPC/MPCX and low-level RBCP subcommands `inspect`, `read`, `verify`, `mpcx-plan`, `probe`, `rbcp-read`, `rbcp-write`, and `clear`, and also provide `ip-read` and `ip-write`.
+
+The high-level MPC/MPCX programming path should continue to use the verified writer implementation rather than creating a second divergent destructive programming path.
 
 ## Compatibility rules
 
 - Support Linux, macOS, and WSL using POSIX sockets.
 - C++17 is the baseline.
-- RBCP default UDP port: 4660 where RBCP is the verified transport for the operation.
+- RBCP default UDP port: 4660.
 - Default timeout: 3 seconds; retain `--timeout` where applicable.
 - Detect MPC versus MPCX from the 22-byte payload, never from the filename extension.
 - Detect SiTCP versus SiTCP-XG automatically where appropriate.
@@ -45,15 +48,25 @@ The IP utilities are **not** MPC/MPCX utilities.
 - Do not blindly retry destructive writes after a lost UDP acknowledgement; the write may already have occurred.
 - Read operations may retry timeouts.
 
+## IP/MAC register map
+
+Verified shared register locations:
+
+- current MAC: `0xFFFFFF12..0xFFFFFF17`
+- current IP: `0xFFFFFF18..0xFFFFFF1B`
+- EEPROM MAC: `0xFFFFFC12..0xFFFFFC17`
+- EEPROM IP: `0xFFFFFC18..0xFFFFFC1B`
+- EEPROM write enable/protect: `0xFFFFFCFF`
+
+Do not guess additional destructive register mappings.
+
 ## Installation
 
-Default `PREFIX` is `$(CURDIR)/install`, not `/usr/local`. `make install` must work without root privileges and install all five public commands. System installation remains available with `PREFIX=/usr/local`.
+Default `PREFIX` is `$(CURDIR)/install`, not `/usr/local`. `make install` must work without root privileges and install the three public commands. System installation remains available with `PREFIX=/usr/local`.
 
 ## Safety
 
-Do not guess register/protocol mappings for destructive operations. Read-only probes are preferred while reconstructing behavior.
-
-`mpc-mpcx-command rbcp-write` and `clear` are intentionally low-level/destructive. Keep explicit command names and the `--yes-really-clear` guard for clear.
+`mpc-mpcx-ip-command rbcp-write` and `clear` are intentionally low-level/destructive. Keep explicit command names and the `--yes-really-clear` guard for clear.
 
 Never commit proprietary MPC/MPCX files, official proprietary executables/libraries, credentials, or device-specific secrets.
 
@@ -63,16 +76,15 @@ Keep these documents synchronized with implementation changes:
 
 - `README.md`: user-facing quick start and command usage.
 - `FOR_DEVELOPERS.md`: architecture, build/development notes, testing, and implementation status.
-- `REVERSE_ENGINEERING.md`: evidence and reconstructed protocol/register behavior, clearly distinguishing MPC/MPCX analysis from SiTCP Utility IP analysis.
+- `REVERSE_ENGINEERING.md`: evidence and reconstructed protocol/register behavior.
 - `AGENTS.md`: constraints future automated development must preserve.
 
 ## Development priorities
 
-1. Preserve the verified C++ `mpc-mpcx-writer` behavior.
-2. Keep `mpc-mpcx-command` compatible with the previous Python utility's advanced command set.
-3. Keep IP utilities completely independent of MPC/MPCX payload handling.
-4. Keep current/EEPROM MAC and IP reporting available in the IP tools.
-5. Implement and verify EEPROM IP writing as the default operation.
-6. Implement an explicit runtime/current IP option and reconnect to the new address for read-back verification.
-7. Factor truly shared low-level transport code into common modules without merging the two functional domains.
-8. Add CI builds for Linux and macOS.
+1. Preserve verified MPC/MPCX EEPROM programming behavior.
+2. Keep IP/MAC handling independent internally while exposing it through the unified CLI.
+3. Always report current/EEPROM MAC and IP in the reader and around writer operations.
+4. Keep EEPROM as the default IP write destination and `--current` explicit.
+5. Reconnect to a newly assigned runtime IP for read-back verification.
+6. Refactor temporary wrapper/include structure into shared implementation modules when stable.
+7. Add CI builds for Linux and macOS.
