@@ -2,7 +2,7 @@
 
 ## Project goal
 
-Provide small C++17 command-line utilities for SiTCP and SiTCP-XG configuration over RBCP, without requiring the official Windows GUI or Python at runtime.
+Provide small C++11 command-line utilities for SiTCP and SiTCP-XG configuration over RBCP, without requiring the official Windows GUI or Python at runtime.
 
 ## Public commands
 
@@ -11,8 +11,10 @@ The intended public command set is:
 - `mpc-mpcx-ip-writer`
 - `mpc-mpcx-ip-reader`
 - `mpc-mpcx-ip-command`
+- `sitcp-sitcpxg-ip-writer`
+- `sitcp-sitcpxg-ip-reader`
 
-The older `mpc-mpcx-writer`, `mpc-mpcx-reader`, and `mpc-mpcx-command` sources may remain as internal implementation units while the unified commands are being refactored, but they are not the public installed names.
+The older `mpc-mpcx-writer`, `mpc-mpcx-reader`, and `mpc-mpcx-command` sources may remain as internal implementation units while the unified commands are being refactored, but they are not public installed names.
 
 Keep command names, option defaults, and output formatting consistent. All `--help` / usage output must show the actual default value whenever an option has a default. For example, show `--port N ... (default: 4660)` and `--timeout SEC ... (default: 3)`.
 
@@ -33,17 +35,18 @@ IP rewriting is optional and uses explicit destination-specific options:
 - When both are specified, perform EEPROM IP writing before current/runtime IP writing so the original address remains reachable until the final network-address-changing operation.
 - After changing current/runtime IP, reconnect to the new address and perform read-back verification.
 
-The writer must always program/verify the supplied MPC/MPCX file. IP-only operation through `mpc-mpcx-ip-writer` is not part of the public CLI.
+The writer must always program/verify the supplied MPC/MPCX file. IP-only operation through `mpc-mpcx-ip-writer` is not part of the public CLI. Keep the standalone `sitcp-sitcpxg-ip-writer` and `sitcp-sitcpxg-ip-reader` commands for IP-only use.
 
 ## Unified CLI, separated internals
 
-MPC/MPCX payload handling and SiTCP IP-register handling are exposed through the same public commands, but must remain logically separated internally.
+MPC/MPCX payload handling and SiTCP IP-register handling may be exposed through the same public commands, but must remain logically separated internally.
 
 - Shared IP register logic lives in `src/ip-config.hpp` or a future equivalent shared module.
 - MPC/MPCX payload classification/reconstruction must not be used to determine IP/MAC values.
 - IP/MAC register reads must not modify or reinterpret MPC/MPCX license payloads.
-- The reader must always display current MAC, current IP, EEPROM MAC, and EEPROM IP.
-- The writer must display those four values before and after the operation whenever the target remains reachable.
+- The MPC/MPCX reader must always display current MAC, current IP, EEPROM MAC, and EEPROM IP.
+- The MPC/MPCX writer must display those four values before and after the operation whenever the target remains reachable.
+- The standalone IP reader/writer must remain available and must not require an MPC/MPCX file.
 
 ## Advanced command
 
@@ -65,7 +68,8 @@ Keep C++ source readable and conventionally formatted.
 ## Compatibility rules
 
 - Support Linux, macOS, and WSL using POSIX sockets.
-- C++17 is the baseline.
+- C++11 is the baseline; do not introduce dependencies on C++14/17/20 language or library features without explicit approval.
+- In particular, avoid `std::optional`, structured bindings, `std::string_view`, filesystem APIs, and assumptions that `std::string::data()` returns writable `char*`.
 - RBCP default UDP port: 4660.
 - Default timeout: 3 seconds; retain `--timeout` where applicable.
 - Detect MPC versus MPCX from the 22-byte payload, never from the filename extension.
@@ -89,7 +93,7 @@ Do not guess additional destructive register mappings.
 
 ## Installation
 
-Default `PREFIX` is `$(CURDIR)/install`, not `/usr/local`. `make install` must work without root privileges and install the three public commands. System installation remains available with `PREFIX=/usr/local`.
+Default `PREFIX` is `$(CURDIR)/install`, not `/usr/local`. `make install` must work without root privileges and install all five public commands. System installation remains available with `PREFIX=/usr/local`.
 
 ## Safety
 
@@ -109,10 +113,11 @@ Keep these documents synchronized with implementation changes:
 ## Development priorities
 
 1. Preserve verified MPC/MPCX EEPROM programming behavior.
-2. Keep IP/MAC handling independent internally while exposing it through the unified CLI.
-3. Always report current/EEPROM MAC and IP in the reader and around writer operations.
+2. Keep IP/MAC handling independent internally while exposing it through the appropriate CLI.
+3. Always report current/EEPROM MAC and IP in the MPC/MPCX reader and around writer operations.
 4. Keep `--set-eeprom-ip` and `--set-current-ip` explicit and independent.
 5. Reconnect to a newly assigned runtime IP for read-back verification.
-6. Refactor temporary wrapper/include structure into shared implementation modules when stable.
-7. Reformat compressed legacy C++ as it is touched and keep new code readable.
-8. Add CI builds for Linux and macOS.
+6. Preserve the standalone `sitcp-sitcpxg-ip-writer` and `sitcp-sitcpxg-ip-reader` commands.
+7. Keep the entire public build compatible with C++11.
+8. Refactor temporary wrapper/include structure into shared implementation modules when stable.
+9. Reformat compressed legacy C++ as it is touched and keep new code readable.
