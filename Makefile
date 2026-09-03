@@ -7,7 +7,8 @@ DESTDIR ?=
 
 BIN_DIR := bin
 SRC_DIR := src
-PROGRAMS := mpc-mpcx-ip-writer mpc-mpcx-ip-reader mpc-mpcx-ip-command
+PROGRAMS := mpc-mpcx-ip-writer mpc-mpcx-ip-reader mpc-mpcx-ip-command \
+            sitcp-sitcpxg-ip-writer sitcp-sitcpxg-ip-reader
 TARGETS := $(addprefix $(BIN_DIR)/,$(PROGRAMS))
 
 all: $(TARGETS)
