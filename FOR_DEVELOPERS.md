@@ -185,6 +185,11 @@ FC3C..FC3D  TCP server port
 FC40..FC41  transmission rate
 ```
 
+According to SiTCP-XG Manual 1.8.1, disconnect timeout value `N` represents
+`(N + 1) * 256 ms`. The documented transmission-rate range is 1..10000
+Mbps in 1-Mbps units. Values outside that range should be reported as such,
+not interpreted as a normal configured rate.
+
 For MPCX programming, the verified 22-byte payload mapping changes only
 `FC00..FC0F` and `FC12..FC17`; `FC10..FC11` are preserved. The writer
 must also preserve `FC18` and later configuration bytes. In particular,
