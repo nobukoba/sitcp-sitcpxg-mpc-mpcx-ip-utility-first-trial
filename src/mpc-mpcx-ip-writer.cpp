@@ -1,4 +1,4 @@
-#include "ip-config.hpp"
+#include "sitcp-sitcpxg-network-config.hpp"
 
 #include "mpc-mpcx-ip-writer.hpp"
 
@@ -12,9 +12,9 @@ void unified_usage(const char* program) {
         << "  --set-eeprom-ip IP   Set EEPROM/default IP address\n"
         << "  --set-current-ip IP  Set current/runtime IP address\n"
         << "  --port N             RBCP UDP port (default: "
-        << ipconfig::DEFAULT_PORT << ")\n"
+        << sitcp_sitcpxg::network_config::DEFAULT_PORT << ")\n"
         << "  --timeout SEC        RBCP timeout in seconds (default: "
-        << ipconfig::DEFAULT_TIMEOUT << ")\n"
+        << sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT << ")\n"
         << "  -h, --help           Show this help\n";
 }
 
@@ -41,8 +41,8 @@ int main(int argc, char** argv) {
         bool has_current_ip = false;
         std::string eeprom_ip;
         std::string current_ip;
-        uint16_t port = ipconfig::DEFAULT_PORT;
-        double timeout = ipconfig::DEFAULT_TIMEOUT;
+        uint16_t port = sitcp_sitcpxg::network_config::DEFAULT_PORT;
+        double timeout = sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT;
 
         for (int i = 3; i < argc; ++i) {
             const std::string option = argv[i];
@@ -50,11 +50,11 @@ int main(int argc, char** argv) {
             if (option == "--set-eeprom-ip" && i + 1 < argc) {
                 eeprom_ip = argv[++i];
                 has_eeprom_ip = true;
-                (void)ipconfig::parse_ipv4(eeprom_ip);
+                (void)sitcp_sitcpxg::network_config::parse_ipv4(eeprom_ip);
             } else if (option == "--set-current-ip" && i + 1 < argc) {
                 current_ip = argv[++i];
                 has_current_ip = true;
-                (void)ipconfig::parse_ipv4(current_ip);
+                (void)sitcp_sitcpxg::network_config::parse_ipv4(current_ip);
             } else if (option == "--port" && i + 1 < argc) {
                 const unsigned long value = std::stoul(argv[++i]);
                 if (value == 0 || value > 65535) {
@@ -75,7 +75,7 @@ int main(int argc, char** argv) {
         }
 
         std::cout << "before:\n";
-        ipconfig::show_all(host, port, timeout, "  ");
+        sitcp_sitcpxg::network_config::show_all(host, port, timeout, "  ");
 
         std::vector<std::string> writer_args;
         writer_args.push_back(argv[0]);
@@ -100,18 +100,18 @@ int main(int argc, char** argv) {
 
         if (has_eeprom_ip) {
             std::cout << "EEPROM IP operation : " << eeprom_ip << '\n';
-            ipconfig::write_eeprom_ip(host, eeprom_ip, port, timeout);
+            sitcp_sitcpxg::network_config::write_eeprom_ip(host, eeprom_ip, port, timeout);
         }
 
         std::string final_host = host;
         if (has_current_ip) {
             std::cout << "current IP operation: " << current_ip << '\n';
-            ipconfig::write_current_ip(host, current_ip, port, timeout);
+            sitcp_sitcpxg::network_config::write_current_ip(host, current_ip, port, timeout);
             final_host = current_ip;
         }
 
         std::cout << "after:\n";
-        ipconfig::show_all(final_host, port, timeout, "  ");
+        sitcp_sitcpxg::network_config::show_all(final_host, port, timeout, "  ");
         std::cout << "status       : WRITE/VERIFY OK\n";
         return 0;
     } catch (const std::exception& error) {
