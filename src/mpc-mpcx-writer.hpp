@@ -22,7 +22,7 @@ constexpr double DEFAULT_TIMEOUT = 3.0;
 constexpr uint16_t DEFAULT_PORT = 4660;
 constexpr uint32_t EEPROM_BASE = 0xFFFFFC00u;
 constexpr uint32_t EEPROM_WRITE_ENABLE = 0xFFFFFCFFu;
-constexpr uint32_t XG_PROBE_ADDRESS = 0xFFFFFF50u;
+constexpr uint32_t XG_IDENTIFIER = 0xFFFFFF08u;
 constexpr size_t EEPROM_READ_SIZE = 0x50;
 constexpr size_t MPC_FILE_SIZE = 22;
 constexpr int FIELD_WIDTH = 20;
@@ -216,32 +216,21 @@ std::vector<uint8_t> reconstruct_normal(const std::vector<uint8_t>& e) {
     return p;
 }
 
-int detect_target(RbcpClient& c, const std::vector<uint8_t>& e, std::string& why) {
-    const auto xg = reconstruct_xg(e);
-    const auto normal = reconstruct_normal(e);
-    const bool xok = classify_payload(xg) == 1;
-    const bool nok = classify_payload(normal) == 2;
-    if (xok && !nok) {
-        why = "EEPROM payload";
-        return 1;
-    }
-    if (nok && !xok) {
-        why = "EEPROM payload";
-        return 2;
-    }
-    if (!xok && !nok) {
-        why = "EEPROM payload not classified";
-        return 0;
-    }
+int detect_target(RbcpClient& c, std::string& why) {
     try {
-        (void)read_retry(c, XG_PROBE_ADDRESS, 1);
-        why = "XG register probe: readable";
-        return 1;
+        const auto identifier = read_retry(c, XG_IDENTIFIER, 4);
+        const std::vector<uint8_t> expected = {0x58, 0x54, 0x43, 0x50};
+        if (identifier == expected) {
+            why = "SiTCPXG identifier: 0x58544350";
+            return 1;
+        }
+        why = "SiTCPXG identifier mismatch";
+        return 2;
     } catch (const RbcpBusError&) {
-        why = "XG register probe: not supported";
+        why = "SiTCPXG identifier register: not supported";
         return 2;
     } catch (const RbcpTimeout&) {
-        why = "XG register probe: timeout";
+        why = "SiTCPXG identifier register: timeout";
         return -1;
     }
 }
@@ -353,7 +342,7 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
         RbcpClient client(ip, port, timeout);
         const auto eeprom = read_exact(client, EEPROM_BASE, EEPROM_READ_SIZE);
         std::string detection;
-        const int target_type = detect_target(client, eeprom, detection);
+        const int target_type = detect_target(client, detection);
 
         field("command", "write");
         field("target", ip + ":" + std::to_string(port));
