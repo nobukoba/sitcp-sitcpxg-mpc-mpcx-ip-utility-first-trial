@@ -1,36 +1,41 @@
 #pragma once
 
 #include "sitcp-sitcpxg-rbcp.hpp"
+
 #include <algorithm>
 #include <cstdint>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace {
-constexpr uint16_t DEFAULT_PORT = 4660;
-constexpr double DEFAULT_TIMEOUT = 3.0;
+
+namespace rbcp = sitcp_sitcpxg::rbcp;
+
+constexpr uint16_t DEFAULT_PORT = rbcp::DEFAULT_PORT;
+constexpr double DEFAULT_TIMEOUT = rbcp::DEFAULT_TIMEOUT;
 constexpr uint32_t EEPROM_BASE = 0xFFFFFC00u;
 constexpr uint32_t EEPROM_WRITE_ENABLE = 0xFFFFFCFFu;
 constexpr int FIELD_WIDTH = 20;
 
-using Error = sitcp_sitcpxg::rbcp::Error;
-using Timeout = sitcp_sitcpxg::rbcp::Timeout;
-using BusError = sitcp_sitcpxg::rbcp::BusError;
-using RbcpClient = sitcp_sitcpxg::rbcp::Client;
+using Error = rbcp::Error;
+using RbcpClient = rbcp::Client;
 
-std::vector<uint8_t> read_exact(RbcpClient& c, uint32_t addr, size_t len) {
-    std::vector<uint8_t> out;
-    for (size_t off = 0; off < len; off += 8) {
-        const size_t n = std::min<size_t>(8, len - off);
-        auto block = sitcp_sitcpxg::rbcp::read_retry(c, addr + static_cast<uint32_t>(off), n);
-        out.insert(out.end(), block.begin(), block.end());
+std::vector<uint8_t> read_exact(RbcpClient& client, uint32_t address,
+                                size_t length) {
+    std::vector<uint8_t> data;
+    for (size_t offset = 0; offset < length; offset += 8) {
+        const size_t chunk_size = std::min<size_t>(8, length - offset);
+        const std::vector<uint8_t> block = rbcp::read_retry(
+            client, address + static_cast<uint32_t>(offset), chunk_size);
+        data.insert(data.end(), block.begin(), block.end());
     }
-    return out;
+    return data;
 }
 
 std::string hex_bytes(const std::vector<uint8_t>& data,
@@ -61,38 +66,72 @@ void field(const std::string& name, const std::string& value) {
               << name << ": " << value << '\n';
 }
 
-bool valid_tag(std::vector<uint8_t> b) {
-    if (b.size() != 7) {
+bool valid_tag(std::vector<uint8_t> tag) {
+    if (tag.size() != 7) {
         return false;
     }
-    for (auto x : b) {
-        if (x == 0 || x == ' ' || x == '-' || (x >= '0' && x <= '9')) continue;
-        x &= 0xdf;
-        if (x < 'A' || x > 'Z') return false;
+
+    for (size_t i = 0; i < tag.size(); ++i) {
+        uint8_t value = tag[i];
+        if (value == 0 || value == ' ' || value == '-' ||
+            (value >= '0' && value <= '9')) {
+            continue;
+        }
+
+        value &= 0xDF;
+        if (value < 'A' || value > 'Z') {
+            return false;
+        }
     }
     return true;
 }
 
-int classify(const std::vector<uint8_t>& d) {
-    if (d.size() != 22) {
+int classify(const std::vector<uint8_t>& payload) {
+    if (payload.size() != 22) {
         return 0;
     }
-    std::vector<uint8_t> a, b;
-    for (size_t i = 6; i < 13; ++i) a.push_back(d[i] ? static_cast<uint8_t>(d[i] - 0x34) : 0);
-    for (size_t i = 0; i < 7; ++i) b.push_back(d[i] ? static_cast<uint8_t>(d[i] - 0x2c) : 0);
-    if (valid_tag(a)) return 2;
-    if (valid_tag(b)) return 1;
+
+    std::vector<uint8_t> normal_tag;
+    std::vector<uint8_t> xg_tag;
+    normal_tag.reserve(7);
+    xg_tag.reserve(7);
+
+    for (size_t i = 6; i < 13; ++i) {
+        normal_tag.push_back(
+            payload[i] ? static_cast<uint8_t>(payload[i] - 0x34) : 0);
+    }
+    for (size_t i = 0; i < 7; ++i) {
+        xg_tag.push_back(
+            payload[i] ? static_cast<uint8_t>(payload[i] - 0x2C) : 0);
+    }
+
+    if (valid_tag(normal_tag)) {
+        return 2;
+    }
+    if (valid_tag(xg_tag)) {
+        return 1;
+    }
     return 0;
 }
 
-std::string type_name(int t) {
-    return t == 1 ? "MPCX (SiTCP-XG)" : t == 2 ? "MPC (normal SiTCP)" : "unknown";
+std::string type_name(int type) {
+    if (type == 1) {
+        return "MPCX (SiTCP-XG)";
+    }
+    if (type == 2) {
+        return "MPC (normal SiTCP)";
+    }
+    return "unknown";
 }
 
-std::vector<uint8_t> payload_mac(const std::vector<uint8_t>& d) {
-    const int t = classify(d);
-    if (t == 1) return std::vector<uint8_t>(d.begin() + 16, d.begin() + 22);
-    if (t == 2) return std::vector<uint8_t>(d.begin(), d.begin() + 6);
+std::vector<uint8_t> payload_mac(const std::vector<uint8_t>& payload) {
+    const int type = classify(payload);
+    if (type == 1) {
+        return std::vector<uint8_t>(payload.begin() + 16, payload.begin() + 22);
+    }
+    if (type == 2) {
+        return std::vector<uint8_t>(payload.begin(), payload.begin() + 6);
+    }
     throw Error("invalid/unknown 22-byte MPC/MPCX payload");
 }
 
@@ -101,134 +140,407 @@ std::string mac_string(const std::vector<uint8_t>& mac) {
 }
 
 std::vector<uint8_t> read_file(const std::string& path) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f) throw Error("cannot open file: " + path);
-    return {(std::istreambuf_iterator<char>(f)), {}};
-}
-
-uint32_t parse_u32(const std::string& s) {
-    size_t pos = 0; unsigned long v = std::stoul(s, &pos, 0);
-    if (pos != s.size() || v > 0xffffffffUL) throw Error("invalid integer: " + s);
-    return static_cast<uint32_t>(v);
-}
-
-std::vector<uint8_t> parse_hex(std::string s) {
-    for (char& c : s) if (c == ',' || c == ':') c = ' ';
-    std::istringstream is(s); std::vector<uint8_t> out; std::string tok;
-    while (is >> tok) {
-        if (tok.rfind("0x", 0) == 0 || tok.rfind("0X", 0) == 0) tok = tok.substr(2);
-        const unsigned long v = std::stoul(tok, nullptr, 16);
-        if (v > 255) throw Error("hex byte out of range: " + tok);
-        out.push_back(static_cast<uint8_t>(v));
+    std::ifstream input(path.c_str(), std::ios::binary);
+    if (!input) {
+        throw Error("cannot open file: " + path);
     }
-    if (out.empty()) throw Error("no hex bytes supplied");
-    return out;
+
+    return std::vector<uint8_t>(
+        std::istreambuf_iterator<char>(input),
+        std::istreambuf_iterator<char>());
 }
 
-struct TargetArgs { std::string ip; uint16_t port = DEFAULT_PORT; double timeout = DEFAULT_TIMEOUT; };
+uint32_t parse_u32(const std::string& text) {
+    size_t position = 0;
+    const unsigned long value = std::stoul(text, &position, 0);
+    if (position != text.size() || value > 0xFFFFFFFFUL) {
+        throw Error("invalid integer: " + text);
+    }
+    return static_cast<uint32_t>(value);
+}
+
+std::vector<uint8_t> parse_hex(std::string text) {
+    for (size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == ',' || text[i] == ':') {
+            text[i] = ' ';
+        }
+    }
+
+    std::istringstream input(text);
+    std::vector<uint8_t> data;
+    std::string token;
+    while (input >> token) {
+        if (token.size() >= 2 &&
+            (token.substr(0, 2) == "0x" || token.substr(0, 2) == "0X")) {
+            token = token.substr(2);
+        }
+
+        size_t position = 0;
+        const unsigned long value = std::stoul(token, &position, 16);
+        if (position != token.size() || value > 255) {
+            throw Error("invalid hex byte: " + token);
+        }
+        data.push_back(static_cast<uint8_t>(value));
+    }
+
+    if (data.empty()) {
+        throw Error("no hex bytes supplied");
+    }
+    return data;
+}
+
+struct TargetArgs {
+    std::string ip;
+    uint16_t port;
+    double timeout;
+
+    TargetArgs()
+        : port(DEFAULT_PORT), timeout(DEFAULT_TIMEOUT) {}
+};
+
 TargetArgs parse_target(int argc, char** argv, int start) {
-    if (start >= argc) throw Error("missing IP address");
-    TargetArgs a; a.ip = argv[start++];
-    for (int i = start; i < argc; ++i) {
-        std::string x = argv[i];
-        if (x == "--port" && i + 1 < argc) { auto p = std::stoul(argv[++i]); if (!p || p > 65535) throw Error("invalid port"); a.port = static_cast<uint16_t>(p); }
-        else if (x == "--timeout" && i + 1 < argc) { a.timeout = std::stod(argv[++i]); if (a.timeout <= 0) throw Error("timeout must be positive"); }
-        else throw Error("unknown option: " + x);
+    if (start >= argc) {
+        throw Error("missing IP address");
     }
-    return a;
+
+    TargetArgs target;
+    target.ip = argv[start++];
+
+    for (int i = start; i < argc; ++i) {
+        const std::string option = argv[i];
+        if (option == "--port" && i + 1 < argc) {
+            const unsigned long value = std::stoul(argv[++i]);
+            if (value == 0 || value > 65535) {
+                throw Error("invalid port");
+            }
+            target.port = static_cast<uint16_t>(value);
+        } else if (option == "--timeout" && i + 1 < argc) {
+            target.timeout = std::stod(argv[++i]);
+            if (target.timeout <= 0) {
+                throw Error("timeout must be positive");
+            }
+        } else {
+            throw Error("unknown option: " + option);
+        }
+    }
+    return target;
 }
 
-void usage(const char* p) {
-    std::cerr << "Usage: " << p << " COMMAND ...\n\n"
-              << "Commands:\n"
-              << "  inspect MPC_OR_MPCX_FILE\n"
-              << "  read IP [--port N] [--timeout SEC]\n"
-              << "  verify IP FILE [--port N] [--timeout SEC]\n"
-              << "  mpcx-plan IP FILE [--port N] [--timeout SEC]\n"
-              << "  probe IP ADDRESS [LENGTH] [--port N] [--timeout SEC]\n"
-              << "  rbcp-read IP ADDRESS LENGTH [--port N] [--timeout SEC]\n"
-              << "  rbcp-write IP ADDRESS HEX-BYTES [--port N] [--timeout SEC]\n"
-              << "  clear IP --yes-really-clear [--port N] [--timeout SEC]\n"
-              << "  write IP FILE [--port N] [--timeout SEC]  (use mpc-mpcx-ip-writer)\n\n"
-              << "Defaults:\n"
-              << "  --port N       RBCP UDP port (default: " << DEFAULT_PORT << ")\n"
-              << "  --timeout SEC  RBCP timeout in seconds (default: " << DEFAULT_TIMEOUT << ")\n"
-              << "  probe LENGTH   bytes to read (default: 1)\n";
+TargetArgs parse_target_with_trailing_options(
+    const std::string& program, const std::string& ip,
+    int argc, char** argv, int option_start) {
+    std::vector<std::string> arguments;
+    arguments.push_back(program);
+    arguments.push_back(ip);
+    for (int i = option_start; i < argc; ++i) {
+        arguments.push_back(argv[i]);
+    }
+
+    std::vector<char*> argument_pointers;
+    for (size_t i = 0; i < arguments.size(); ++i) {
+        argument_pointers.push_back(&arguments[i][0]);
+    }
+
+    return parse_target(static_cast<int>(argument_pointers.size()),
+                        &argument_pointers[0], 1);
 }
+
+void usage(const char* program) {
+    std::cerr
+        << "Usage: " << program << " COMMAND ...\n\n"
+        << "Commands:\n"
+        << "  inspect MPC_OR_MPCX_FILE\n"
+        << "  mac MPC_OR_MPCX_FILE\n"
+        << "  read IP [--port N] [--timeout SEC]\n"
+        << "  verify IP FILE [--port N] [--timeout SEC]\n"
+        << "  mpcx-plan IP FILE [--port N] [--timeout SEC]\n"
+        << "  probe IP ADDRESS [LENGTH] [--port N] [--timeout SEC]\n"
+        << "  rbcp-read IP ADDRESS LENGTH [--port N] [--timeout SEC]\n"
+        << "  rbcp-write IP ADDRESS HEX-BYTES [--port N] [--timeout SEC]\n"
+        << "  clear IP --yes-really-clear [--port N] [--timeout SEC]\n"
+        << "  write IP FILE [--port N] [--timeout SEC]"
+           "  (use mpc-mpcx-ip-writer)\n\n"
+        << "Defaults:\n"
+        << "  --port N       RBCP UDP port (default: "
+        << DEFAULT_PORT << ")\n"
+        << "  --timeout SEC  RBCP timeout in seconds (default: "
+        << DEFAULT_TIMEOUT << ")\n"
+        << "  probe LENGTH   bytes to read (default: 1)\n";
 }
+
+}  // namespace
 
 inline int run_mpc_mpcx_command(int argc, char** argv) {
     try {
-        if (argc < 2 || std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help") { usage(argv[0]); return argc < 2 ? 2 : 0; }
-        const std::string cmd = argv[1];
-
-        if (cmd == "inspect") {
-            if (argc != 3) throw Error("usage: inspect MPC_OR_MPCX_FILE");
-            auto p = read_file(argv[2]);
-            field("command", "inspect"); field("file", argv[2]); field("size", std::to_string(p.size()) + " bytes");
-            field("payload type", type_name(classify(p))); field("writer type", std::to_string(classify(p))); if (classify(p)) field("MAC", mac_string(payload_mac(p))); field("payload", hex_bytes(p));
-            return classify(p) ? 0 : 2;
+        if (argc < 2 || std::string(argv[1]) == "-h" ||
+            std::string(argv[1]) == "--help") {
+            usage(argv[0]);
+            return argc < 2 ? 2 : 0;
         }
 
-        if (cmd == "mac") {
-            if (argc != 3) throw Error("usage: mac MPC_OR_MPCX_FILE");
-            auto p = read_file(argv[2]);
-            const int t = classify(p);
-            if (!t) throw Error("invalid/unknown 22-byte MPC/MPCX payload");
+        const std::string command = argv[1];
+
+        if (command == "inspect") {
+            if (argc != 3) {
+                throw Error("usage: inspect MPC_OR_MPCX_FILE");
+            }
+
+            const std::vector<uint8_t> payload = read_file(argv[2]);
+            const int type = classify(payload);
+            field("command", "inspect");
+            field("file", argv[2]);
+            field("size", std::to_string(payload.size()) + " bytes");
+            field("payload type", type_name(type));
+            field("writer type", std::to_string(type));
+            if (type != 0) {
+                field("MAC", mac_string(payload_mac(payload)));
+            }
+            field("payload", hex_bytes(payload));
+            return type != 0 ? 0 : 2;
+        }
+
+        if (command == "mac") {
+            if (argc != 3) {
+                throw Error("usage: mac MPC_OR_MPCX_FILE");
+            }
+
+            const std::vector<uint8_t> payload = read_file(argv[2]);
+            const int type = classify(payload);
+            if (type == 0) {
+                throw Error("invalid/unknown 22-byte MPC/MPCX payload");
+            }
+
             field("command", "mac");
             field("file", argv[2]);
-            field("payload type", type_name(t));
-            field("MAC", mac_string(payload_mac(p)));
+            field("payload type", type_name(type));
+            field("MAC", mac_string(payload_mac(payload)));
             return 0;
         }
 
-        if (cmd == "read") {
-            auto a = parse_target(argc, argv, 2); RbcpClient c(a.ip, a.port, a.timeout); auto e = read_exact(c, EEPROM_BASE, 0x50);
-            field("command", "read"); field("target", a.ip + ":" + std::to_string(a.port)); field("EEPROM FC00..FC4F", hex_bytes(e)); field("status", "READ OK"); return 0;
+        if (command == "read") {
+            const TargetArgs target = parse_target(argc, argv, 2);
+            RbcpClient client(target.ip, target.port, target.timeout);
+            const std::vector<uint8_t> eeprom =
+                read_exact(client, EEPROM_BASE, 0x50);
+
+            field("command", "read");
+            field("target",
+                  target.ip + ":" + std::to_string(target.port));
+            field("EEPROM FC00..FC4F", hex_bytes(eeprom));
+            field("status", "READ OK");
+            return 0;
         }
 
-        if (cmd == "probe") {
-            if (argc < 4) throw Error("usage: probe IP ADDRESS [LENGTH]");
-            const std::string ip = argv[2]; const uint32_t addr = parse_u32(argv[3]); size_t len = 1; int opt = 4;
-            if (opt < argc && std::string(argv[opt]).rfind("--",0) != 0) { len = std::stoul(argv[opt++], nullptr, 0); }
-            std::vector<std::string> tmp = {argv[0], ip}; for (int i=opt;i<argc;++i) tmp.emplace_back(argv[i]);
-            std::vector<char*> av; for (auto& s:tmp) av.push_back(&s[0]); auto a = parse_target((int)av.size(), av.data(), 1);
-            auto d = RbcpClient(a.ip,a.port,a.timeout).read(addr,len); field("command","probe"); field("target",a.ip+":"+std::to_string(a.port)); field("address",hex_address(addr)); field("data",hex_bytes(d)); field("status","RBCP REACHABLE"); return 0;
+        if (command == "probe") {
+            if (argc < 4) {
+                throw Error("usage: probe IP ADDRESS [LENGTH]");
+            }
+
+            const std::string ip = argv[2];
+            const uint32_t address = parse_u32(argv[3]);
+            size_t length = 1;
+            int option_start = 4;
+            if (option_start < argc &&
+                std::string(argv[option_start]).find("--") != 0) {
+                length = std::stoul(argv[option_start++], 0, 0);
+            }
+
+            const TargetArgs target = parse_target_with_trailing_options(
+                argv[0], ip, argc, argv, option_start);
+            RbcpClient client(target.ip, target.port, target.timeout);
+            const std::vector<uint8_t> data = client.read(address, length);
+
+            field("command", "probe");
+            field("target",
+                  target.ip + ":" + std::to_string(target.port));
+            field("address", hex_address(address));
+            field("data", hex_bytes(data));
+            field("status", "RBCP REACHABLE");
+            return 0;
         }
 
-        if (cmd == "rbcp-read") {
-            if (argc < 5) throw Error("usage: rbcp-read IP ADDRESS LENGTH");
-            const std::string ip=argv[2]; uint32_t addr=parse_u32(argv[3]); size_t len=std::stoul(argv[4],nullptr,0);
-            std::vector<std::string> tmp={argv[0],ip}; for(int i=5;i<argc;++i)tmp.emplace_back(argv[i]); std::vector<char*> av;for(auto&s:tmp)av.push_back(&s[0]);auto a=parse_target((int)av.size(),av.data(),1);
-            auto d=RbcpClient(a.ip,a.port,a.timeout).read(addr,len);field("command","rbcp-read");field("address",hex_address(addr));field("data",hex_bytes(d));return 0;
+        if (command == "rbcp-read") {
+            if (argc < 5) {
+                throw Error("usage: rbcp-read IP ADDRESS LENGTH");
+            }
+
+            const std::string ip = argv[2];
+            const uint32_t address = parse_u32(argv[3]);
+            const size_t length = std::stoul(argv[4], 0, 0);
+            const TargetArgs target = parse_target_with_trailing_options(
+                argv[0], ip, argc, argv, 5);
+
+            RbcpClient client(target.ip, target.port, target.timeout);
+            const std::vector<uint8_t> data = client.read(address, length);
+
+            field("command", "rbcp-read");
+            field("address", hex_address(address));
+            field("data", hex_bytes(data));
+            return 0;
         }
 
-        if (cmd == "rbcp-write") {
-            if (argc < 5) throw Error("usage: rbcp-write IP ADDRESS HEX-BYTES");
-            const std::string ip=argv[2];uint32_t addr=parse_u32(argv[3]);auto bytes=parse_hex(argv[4]);
-            std::vector<std::string> tmp={argv[0],ip};for(int i=5;i<argc;++i)tmp.emplace_back(argv[i]);std::vector<char*> av;for(auto&s:tmp)av.push_back(&s[0]);auto a=parse_target((int)av.size(),av.data(),1);
-            auto ack=RbcpClient(a.ip,a.port,a.timeout).write(addr,bytes);(void)ack;field("command","rbcp-write");field("address",hex_address(addr));field("data",hex_bytes(bytes));field("status","WRITE OK");return 0;
+        if (command == "rbcp-write") {
+            if (argc < 5) {
+                throw Error("usage: rbcp-write IP ADDRESS HEX-BYTES");
+            }
+
+            const std::string ip = argv[2];
+            const uint32_t address = parse_u32(argv[3]);
+            const std::vector<uint8_t> bytes = parse_hex(argv[4]);
+            const TargetArgs target = parse_target_with_trailing_options(
+                argv[0], ip, argc, argv, 5);
+
+            RbcpClient client(target.ip, target.port, target.timeout);
+            const std::vector<uint8_t> ack = client.write(address, bytes);
+            if (ack.size() != bytes.size()) {
+                throw Error("unexpected RBCP ACK length");
+            }
+
+            field("command", "rbcp-write");
+            field("address", hex_address(address));
+            field("data", hex_bytes(bytes));
+            field("status", "WRITE OK");
+            return 0;
         }
 
-        if (cmd == "verify" || cmd == "mpcx-plan") {
-            if (argc < 4) throw Error("missing IP or FILE");
-            const std::string ip=argv[2], file=argv[3];auto payload=read_file(file);int t=classify(payload);if(!t)throw Error("invalid/unknown 22-byte MPC payload");
-            std::vector<std::string> tmp={argv[0],ip};for(int i=4;i<argc;++i)tmp.emplace_back(argv[i]);std::vector<char*> av;for(auto&s:tmp)av.push_back(&s[0]);auto a=parse_target((int)av.size(),av.data(),1);RbcpClient c(a.ip,a.port,a.timeout);auto e=read_exact(c,EEPROM_BASE,0x50);
-            if(cmd=="mpcx-plan"){if(t!=1)throw Error("payload is not classified as SiTCP-XG");std::vector<uint8_t> expected(e.begin(),e.begin()+24);std::copy(payload.begin(),payload.begin()+16,expected.begin());std::copy(payload.begin()+16,payload.end(),expected.begin()+18);field("command","mpcx-plan");field("preserved FC10..FC11",hex_bytes({e[16],e[17]}));field("EEPROM record",hex_bytes(expected));field("status","NO WRITE PERFORMED");return 0;}
-            bool ok=false;if(t==1){std::vector<uint8_t> expected(e.begin(),e.begin()+24);std::copy(payload.begin(),payload.begin()+16,expected.begin());std::copy(payload.begin()+16,payload.end(),expected.begin()+18);ok=std::equal(expected.begin(),expected.end(),e.begin());}else{ok=std::equal(payload.begin(),payload.begin()+6,e.begin()+0x12)&&std::equal(payload.begin()+6,payload.end(),e.begin()+0x40);}field("command","verify");field("file type",type_name(t));field("match",ok?"YES":"NO");field("status",ok?"VERIFY OK":"VERIFY FAILED");return ok?0:6;
+        if (command == "verify" || command == "mpcx-plan") {
+            if (argc < 4) {
+                throw Error("missing IP or FILE");
+            }
+
+            const std::string ip = argv[2];
+            const std::string file = argv[3];
+            const std::vector<uint8_t> payload = read_file(file);
+            const int type = classify(payload);
+            if (type == 0) {
+                throw Error("invalid/unknown 22-byte MPC/MPCX payload");
+            }
+
+            const TargetArgs target = parse_target_with_trailing_options(
+                argv[0], ip, argc, argv, 4);
+            RbcpClient client(target.ip, target.port, target.timeout);
+            const std::vector<uint8_t> eeprom =
+                read_exact(client, EEPROM_BASE, 0x50);
+
+            if (command == "mpcx-plan") {
+                if (type != 1) {
+                    throw Error("payload is not classified as SiTCP-XG");
+                }
+
+                std::vector<uint8_t> expected(
+                    eeprom.begin(), eeprom.begin() + 24);
+                std::copy(payload.begin(), payload.begin() + 16,
+                          expected.begin());
+                std::copy(payload.begin() + 16, payload.end(),
+                          expected.begin() + 18);
+
+                const std::vector<uint8_t> preserved = {
+                    eeprom[16], eeprom[17]
+                };
+                field("command", "mpcx-plan");
+                field("preserved FC10..FC11", hex_bytes(preserved));
+                field("EEPROM record", hex_bytes(expected));
+                field("status", "NO WRITE PERFORMED");
+                return 0;
+            }
+
+            bool matches = false;
+            if (type == 1) {
+                std::vector<uint8_t> expected(
+                    eeprom.begin(), eeprom.begin() + 24);
+                std::copy(payload.begin(), payload.begin() + 16,
+                          expected.begin());
+                std::copy(payload.begin() + 16, payload.end(),
+                          expected.begin() + 18);
+                matches = std::equal(
+                    expected.begin(), expected.end(), eeprom.begin());
+            } else {
+                matches =
+                    std::equal(payload.begin(), payload.begin() + 6,
+                               eeprom.begin() + 0x12) &&
+                    std::equal(payload.begin() + 6, payload.end(),
+                               eeprom.begin() + 0x40);
+            }
+
+            field("command", "verify");
+            field("file type", type_name(type));
+            field("match", matches ? "YES" : "NO");
+            field("status", matches ? "VERIFY OK" : "VERIFY FAILED");
+            return matches ? 0 : 6;
         }
 
-        if (cmd == "clear") {
-            if (argc < 4 || std::string(argv[3]) != "--yes-really-clear") throw Error("clear is destructive; add --yes-really-clear immediately after IP");
-            const std::string ip=argv[2];std::vector<std::string> tmp={argv[0],ip};for(int i=4;i<argc;++i)tmp.emplace_back(argv[i]);std::vector<char*> av;for(auto&s:tmp)av.push_back(&s[0]);auto a=parse_target((int)av.size(),av.data(),1);RbcpClient c(a.ip,a.port,a.timeout);
-            c.write(EEPROM_WRITE_ENABLE,{0x00});try{std::vector<uint8_t> ff(16,0xff);for(uint32_t off=0;off<0x80;off+=16)c.write(EEPROM_BASE+off,ff);}catch(...){try{c.write(EEPROM_WRITE_ENABLE,{0xff});}catch(...){}throw;}c.write(EEPROM_WRITE_ENABLE,{0xff});field("command","clear");field("EEPROM area","0xFFFFFC00..0xFFFFFC7F");field("status","CLEAR OK");return 0;
+        if (command == "clear") {
+            if (argc < 4 ||
+                std::string(argv[3]) != "--yes-really-clear") {
+                throw Error(
+                    "clear is destructive; add --yes-really-clear "
+                    "immediately after IP");
+            }
+
+            const std::string ip = argv[2];
+            const TargetArgs target = parse_target_with_trailing_options(
+                argv[0], ip, argc, argv, 4);
+            RbcpClient client(target.ip, target.port, target.timeout);
+
+            const std::vector<uint8_t> enable(1, 0x00);
+            const std::vector<uint8_t> protect(1, 0xFF);
+            const std::vector<uint8_t> erased_block(16, 0xFF);
+
+            const std::vector<uint8_t> enable_ack =
+                client.write(EEPROM_WRITE_ENABLE, enable);
+            if (enable_ack.size() != enable.size()) {
+                throw Error(
+                    "unexpected RBCP ACK length enabling EEPROM writes");
+            }
+
+            try {
+                for (uint32_t offset = 0; offset < 0x80; offset += 16) {
+                    const std::vector<uint8_t> ack = client.write(
+                        EEPROM_BASE + offset, erased_block);
+                    if (ack.size() != erased_block.size()) {
+                        throw Error(
+                            "unexpected RBCP ACK length while clearing EEPROM");
+                    }
+                }
+            } catch (...) {
+                try {
+                    client.write(EEPROM_WRITE_ENABLE, protect);
+                } catch (...) {
+                }
+                throw;
+            }
+
+            const std::vector<uint8_t> protect_ack =
+                client.write(EEPROM_WRITE_ENABLE, protect);
+            if (protect_ack.size() != protect.size()) {
+                throw Error(
+                    "unexpected RBCP ACK length restoring EEPROM protection");
+            }
+
+            const std::vector<uint8_t> actual =
+                read_exact(client, EEPROM_BASE, 0x80);
+            if (actual != std::vector<uint8_t>(0x80, 0xFF)) {
+                throw Error("EEPROM clear read-back verification failed");
+            }
+
+            field("command", "clear");
+            field("EEPROM area", "0xFFFFFC00..0xFFFFFC7F");
+            field("read-back verify", "OK");
+            field("EEPROM write protect", "ENABLED");
+            field("status", "CLEAR OK");
+            return 0;
         }
 
-        if (cmd == "write") {
-            std::cerr << "Use mpc-mpcx-ip-writer for the verified high-level write path.\n";
+        if (command == "write") {
+            std::cerr
+                << "Use mpc-mpcx-ip-writer for the verified "
+                   "high-level write path.\n";
             return 8;
         }
 
-        throw Error("unknown command: " + cmd);
-    } catch (const std::exception& e) { std::cerr << "ERROR: " << e.what() << '\n'; return 1; }
+        throw Error("unknown command: " + command);
+    } catch (const std::exception& error) {
+        std::cerr << "ERROR: " << error.what() << '\n';
+        return 1;
+    }
 }
