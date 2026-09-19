@@ -1,6 +1,6 @@
 #pragma once
 
-#include <arpa/inet.h>
+#include "sitcp-sitcpxg-rbcp.hpp"
 #include <algorithm>
 #include <cerrno>
 #include <cstdint>
@@ -24,98 +24,17 @@ constexpr uint32_t EEPROM_BASE = 0xFFFFFC00u;
 constexpr uint32_t EEPROM_WRITE_ENABLE = 0xFFFFFCFFu;
 constexpr int FIELD_WIDTH = 20;
 
-struct Error : std::runtime_error { using std::runtime_error::runtime_error; };
-struct Timeout : Error { using Error::Error; };
-struct BusError : Error { using Error::Error; };
-
-std::string hex_bytes(const std::vector<uint8_t>& data, char sep = ' ') {
-    std::ostringstream os;
-    os << std::hex << std::setfill('0');
-    for (size_t i = 0; i < data.size(); ++i) {
-        if (i) os << sep;
-        os << std::setw(2) << static_cast<unsigned>(data[i]);
-    }
-    return os.str();
-}
-
-std::string hex_address(uint32_t address) {
-    std::ostringstream os;
-    os << "0x" << std::hex << std::setw(8) << std::setfill('0') << address;
-    return os.str();
-}
-
-void field(const std::string& key, const std::string& value) {
-    std::cout << std::left << std::setw(FIELD_WIDTH) << key << ": " << value << '\n';
-}
-
-class RbcpClient {
-public:
-    RbcpClient(std::string host, uint16_t port, double timeout)
-        : host_(std::move(host)), port_(port), timeout_(timeout) {}
-
-    std::vector<uint8_t> read(uint32_t address, size_t length) {
-        if (length > 255) throw Error("one RBCP read is limited to 255 bytes");
-        return transaction(0xC0, address, {}, static_cast<uint8_t>(length));
-    }
-
-    std::vector<uint8_t> write(uint32_t address, const std::vector<uint8_t>& data) {
-        if (data.size() > 255) throw Error("one RBCP write is limited to 255 bytes");
-        return transaction(0x80, address, data, static_cast<uint8_t>(data.size()));
-    }
-
-private:
-    std::vector<uint8_t> transaction(uint8_t cmd, uint32_t addr,
-                                     const std::vector<uint8_t>& payload, uint8_t len) {
-        const uint8_t id = id_++;
-        std::vector<uint8_t> packet = {0xff, cmd, id, len,
-            static_cast<uint8_t>(addr >> 24), static_cast<uint8_t>(addr >> 16),
-            static_cast<uint8_t>(addr >> 8), static_cast<uint8_t>(addr)};
-        packet.insert(packet.end(), payload.begin(), payload.end());
-
-        addrinfo hints{}; hints.ai_family = AF_INET; hints.ai_socktype = SOCK_DGRAM;
-        addrinfo* res = nullptr;
-        const std::string ps = std::to_string(port_);
-        const int gai = getaddrinfo(host_.c_str(), ps.c_str(), &hints, &res);
-        if (gai) throw Error(gai_strerror(gai));
-        const int fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-        if (fd < 0) { freeaddrinfo(res); throw Error(strerror(errno)); }
-        const ssize_t sent = sendto(fd, packet.data(), packet.size(), 0, res->ai_addr, res->ai_addrlen);
-        freeaddrinfo(res);
-        if (sent != static_cast<ssize_t>(packet.size())) { close(fd); throw Error(strerror(errno)); }
-
-        fd_set fds; FD_ZERO(&fds); FD_SET(fd, &fds);
-        timeval tv{};
-        tv.tv_sec = static_cast<decltype(tv.tv_sec)>(timeout_);
-        tv.tv_usec = static_cast<decltype(tv.tv_usec)>(
-            (timeout_ - static_cast<long>(timeout_)) * 1000000.0);
-        const int rv = select(fd + 1, &fds, nullptr, nullptr, &tv);
-        if (rv == 0) { close(fd); throw Timeout("RBCP timeout"); }
-        if (rv < 0) { close(fd); throw Error(strerror(errno)); }
-        uint8_t buf[263];
-        const ssize_t n = recvfrom(fd, buf, sizeof(buf), 0, nullptr, nullptr);
-        close(fd);
-        if (n < 8 || buf[0] != 0xff || buf[2] != id) throw Error("invalid RBCP reply");
-        if (buf[1] & 1) throw BusError("RBCP bus error");
-        return {buf + 8, buf + n};
-    }
-    std::string host_; uint16_t port_; double timeout_; uint8_t id_ = 0;
-};
-
-std::vector<uint8_t> read_retry(RbcpClient& c, uint32_t addr, size_t len) {
-    for (int i = 0; i < 3; ++i) {
-        try { return c.read(addr, len); }
-        catch (const Timeout&) { if (i == 2) throw; }
-    }
-    throw Timeout("RBCP timeout");
-}
+using Error = sitcp_sitcpxg::rbcp::Error;
+using Timeout = sitcp_sitcpxg::rbcp::Timeout;
+using BusError = sitcp_sitcpxg::rbcp::BusError;
+using RbcpClient = sitcp_sitcpxg::rbcp::Client;
 
 std::vector<uint8_t> read_exact(RbcpClient& c, uint32_t addr, size_t len) {
     std::vector<uint8_t> out;
     for (size_t off = 0; off < len; off += 8) {
         const size_t n = std::min<size_t>(8, len - off);
-        auto b = read_retry(c, addr + static_cast<uint32_t>(off), n);
-        if (b.size() != n) throw Error("short read");
-        out.insert(out.end(), b.begin(), b.end());
+        auto block = sitcp_sitcpxg::rbcp::read_retry(c, addr + static_cast<uint32_t>(off), n);
+        out.insert(out.end(), block.begin(), block.end());
     }
     return out;
 }
