@@ -84,7 +84,10 @@ private:
         if (sent != static_cast<ssize_t>(packet.size())) { close(fd); throw Error(strerror(errno)); }
 
         fd_set fds; FD_ZERO(&fds); FD_SET(fd, &fds);
-        timeval tv{static_cast<long>(timeout_), static_cast<long>((timeout_ - static_cast<long>(timeout_)) * 1000000.0)};
+        timeval tv{};
+        tv.tv_sec = static_cast<decltype(tv.tv_sec)>(timeout_);
+        tv.tv_usec = static_cast<decltype(tv.tv_usec)>(
+            (timeout_ - static_cast<long>(timeout_)) * 1000000.0);
         const int rv = select(fd + 1, &fds, nullptr, nullptr, &tv);
         if (rv == 0) { close(fd); throw Timeout("RBCP timeout"); }
         if (rv < 0) { close(fd); throw Error(strerror(errno)); }
