@@ -98,18 +98,24 @@ This is a separate layout from SiTCP-XG and must remain a distinct MPC/MPCX impl
 
 The current MPC/MPCX implementation reconstructs both possible 22-byte payloads from EEPROM and runs the recovered classifier. If only one mapping is valid, that identifies the target generation.
 
-If both appear valid, the current read-only disambiguation probe is:
+Real-device comparison showed that both reconstructed payloads can classify as valid at the same time: a SiTCP-XG target may retain normal-layout-looking data at FC40..FC4F, and a normal SiTCP target may also contain XG-layout-looking data at FC00..FC0F. Therefore payload classification alone is not sufficient to disambiguate those cases.
+
+For ambiguous payloads, use the documented SiTCPXG Identifier register:
 
 ```text
-0xFFFFFF50
+0xFFFFFF08..0xFFFFFF0B = 0x58544350
 ```
 
-Observed behavior used by this project:
+An exact identifier match selects SiTCP-XG. A bus error or identifier mismatch falls back to the normal mapping only when the normal reconstructed payload is valid. A timeout remains unresolved. The previous experimental probe at `0xFFFFFF50` was removed because it is not a documented SiTCPXG identification register.
+
+Hardware/file pairs verified on 2026-09-19:
 
 ```text
-readable       -> SiTCP-XG
-RBCP bus error -> normal SiTCP
-timeout        -> unresolved
+SiTCP-XG 192.168.2.187:
+  .mpcx = FC00..FC0F + FC12..FC17
+
+normal SiTCP 192.168.2.161:
+  .mpc  = FC12..FC17 + FC40..FC4F
 ```
 
 This is MPC/MPCX-side detection logic. It must not automatically be reused as the design basis for the IP-only utility unless independently verified there.
