@@ -123,9 +123,13 @@ void show_xg_parameters(const std::vector<uint8_t>& eeprom) {
         field("transmission rate",
               std::to_string(transmission_rate) + " Mbps");
     } else {
-        field("transmission rate",
+        field("transmission rate raw",
               std::to_string(transmission_rate) +
-              " (outside documented range 1..10000 Mbps)");
+              " (outside documented range 1..10000)");
+        field("FC40..FC4F",
+              hex_bytes(eeprom, 0x40, 0x50));
+        field("FC40 note",
+              "preserved; may contain data unrelated to XG rate");
     }
 }
 
