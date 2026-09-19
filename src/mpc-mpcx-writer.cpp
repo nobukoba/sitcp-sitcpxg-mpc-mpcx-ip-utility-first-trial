@@ -236,7 +236,7 @@ int detect_target(RbcpClient& c, const std::vector<uint8_t>& e, std::string& why
         why = "XG register probe: readable";
         return 1;
     } catch (const RbcpBusError&) {
-        why = "XG register probe: bus error";
+        why = "XG register probe: not supported";
         return 2;
     } catch (const RbcpTimeout&) {
         why = "XG register probe: timeout";
