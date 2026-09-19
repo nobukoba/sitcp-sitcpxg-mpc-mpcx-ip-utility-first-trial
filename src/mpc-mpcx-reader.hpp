@@ -62,12 +62,19 @@ std::vector<uint8_t>o;
 for(size_t x=0;x<n;x+=8){
 size_t m=std::min<size_t>(8,n-x);
 auto b=rr(c,a+x,m);
-if(b.size()!=m)throw Error("short read");o.insert(o.end(),b.begin(),b.end());}
+if (b.size() != m) {
+throw Error("short read");
+}
+o.insert(o.end(), b.begin(), b.end());
+}
 return o;}
 bool tag(std::vector<uint8_t>b){
 if(b.size()!=7)return false;
 for(auto x:b){
-if(x==0||x==' '||x=='-'||(x>='0'&&x<='9'))continue;x&=0xdf;
+if (x == 0 || x == ' ' || x == '-' || (x >= '0' && x <= '9')) {
+continue;
+}
+x &= 0xdf;
 if(x<'A'||x>'Z')return false;}
 return true;}
 int cls(const std::vector<uint8_t>&d){
@@ -86,7 +93,11 @@ return p;}
 std::string hex(const std::vector<uint8_t>&d,size_t a=0,size_t z=SIZE_MAX,char s=' '){z=std::min(z,d.size());
 std::ostringstream o;o<<std::hex<<std::setfill('0');
 for(size_t i=a;i<z;i++){
-if(i>a)o<<s;o<<std::setw(2)<<(unsigned)d[i];}
+if (i > a) {
+o << s;
+}
+o << std::setw(2) << (unsigned)d[i];
+}
 return o.str();} void field(std::string k,std::string v){
 std::cout<<std::left<<std::setw(FW)<<k<<": "<<v<<'\n';}
 std::string tn(int t){
@@ -121,7 +132,11 @@ for(int i=2;i<ac;i++){
 std::string a=av[i];
 if(a=="--port"&&i+1<ac){
 auto p=std::stoul(av[++i]);
-if(!p||p>65535)throw Error("invalid port");port=p;}
+if (!p || p > 65535) {
+throw Error("invalid port");
+}
+port = p;
+}
 else if(a=="--timeout"&&i+1<ac){timeout=std::stod(av[++i]);
 if(timeout<=0)throw Error("timeout must be positive");}
 else if(a=="-h"||a=="--help"){usage(av[0]);
