@@ -1,6 +1,6 @@
 #include "ip-config.hpp"
 
-#include "mpc-mpcx-command.hpp"
+#include "mpc-mpcx-ip-command.hpp"
 
 namespace {
 void unified_usage(const char* p) {
