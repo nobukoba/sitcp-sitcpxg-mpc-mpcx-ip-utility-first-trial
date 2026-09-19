@@ -41,7 +41,9 @@ The writer must always program/verify the supplied MPC/MPCX file. IP-only operat
 
 MPC/MPCX payload handling and SiTCP IP-register handling may be exposed through the same public commands, but must remain logically separated internally.
 
-- Shared IP register logic lives in `src/ip-config.hpp` or a future equivalent shared module.
+- Shared RBCP transport lives in `src/sitcp-sitcpxg-rbcp.hpp`.
+- Shared IP/MAC register logic lives in `src/sitcp-sitcpxg-network-config.hpp`.
+- Shared MPC/MPCX payload logic lives in `src/sitcp-sitcpxg-mpc-mpcx.hpp`.
 - MPC/MPCX payload classification/reconstruction must not be used to determine IP/MAC values.
 - IP/MAC register reads must not modify or reinterpret MPC/MPCX license payloads.
 - The MPC/MPCX reader must always display current MAC, current IP, EEPROM MAC, and EEPROM IP.
@@ -75,7 +77,7 @@ Keep C++ source readable and conventionally formatted.
 - Default timeout: 3 seconds; retain `--timeout` where applicable.
 - Detect MPC versus MPCX from the 22-byte payload, never from the filename extension.
 - Detect SiTCP versus SiTCP-XG automatically where appropriate.
-- Determine the target generation first from the documented read-only SiTCPXG Identifier register at `0xFFFFFF08..0xFFFFFF0B`; only an exact value of `0x58544350` identifies SiTCP-XG. Keep generation detection separate from MPC/MPCX payload classification.
+- Determine the target generation first from the documented read-only SiTCP-XG Identifier register at `0xFFFFFF08..0xFFFFFF0B`; only an exact value of `0x58544350` identifies SiTCP-XG. Keep generation detection separate from MPC/MPCX payload classification.
 - Do not use the former experimental `0xFFFFFF50` probe as a SiTCP-XG generation identifier.
 - Do not infer the device generation solely from FC00/FC40 payload-looking data: verified hardware shows stale/alternate-layout data can make both reconstructed payloads classify as valid.
 - EEPROM writes must restore write protection even after failures where that mechanism applies.
