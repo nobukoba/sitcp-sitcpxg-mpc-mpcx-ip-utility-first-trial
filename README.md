@@ -171,3 +171,12 @@ EEPROM WE   : 0xFFFFFCFF
 ```
 
 This is an experimental implementation and is not an official Bee Beans Technologies utility. Proprietary executables, libraries, and user-specific MPC/MPCX files are not included.
+
+
+## Documentation
+
+- [Technical notes](TECHNICAL_NOTES.md) — evidence, MPC/MPCX EEPROM mappings, device-generation detection, and implementation findings.
+- [For developers](FOR_DEVELOPERS.md) — architecture, build/development notes, and testing.
+- [Agent instructions](AGENTS.md) — constraints for automated development.
+
+The technical notes link to the relevant Bee Beans Technologies documentation, including the SiTCPXG manual and MPC Writer XG guide.
