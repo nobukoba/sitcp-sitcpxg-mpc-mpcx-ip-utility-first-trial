@@ -1,4 +1,4 @@
-#include "ip-config.hpp"
+#include "sitcp-sitcpxg-network-config.hpp"
 
 #include <iostream>
 #include <string>
@@ -9,8 +9,8 @@ void usage(const char* program) {
     std::cerr
         << "Usage: " << program << " IP [options]\n\n"
         << "Options:\n"
-        << "  --port N       RBCP UDP port (default: " << ipconfig::DEFAULT_PORT << ")\n"
-        << "  --timeout SEC  RBCP timeout in seconds (default: " << ipconfig::DEFAULT_TIMEOUT << ")\n"
+        << "  --port N       RBCP UDP port (default: " << sitcp_sitcpxg::network_config::DEFAULT_PORT << ")\n"
+        << "  --timeout SEC  RBCP timeout in seconds (default: " << sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT << ")\n"
         << "  -h, --help     Show this help\n";
 }
 
@@ -26,32 +26,32 @@ int main(int argc, char** argv) {
         }
 
         const std::string host = argv[1];
-        uint16_t port = ipconfig::DEFAULT_PORT;
-        double timeout = ipconfig::DEFAULT_TIMEOUT;
+        uint16_t port = sitcp_sitcpxg::network_config::DEFAULT_PORT;
+        double timeout = sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT;
 
         for (int i = 2; i < argc; ++i) {
             const std::string arg = argv[i];
             if (arg == "--port" && i + 1 < argc) {
                 const auto value = std::stoul(argv[++i]);
                 if (value == 0 || value > 65535) {
-                    throw ipconfig::Error("invalid port");
+                    throw sitcp_sitcpxg::network_config::Error("invalid port");
                 }
                 port = static_cast<uint16_t>(value);
             } else if (arg == "--timeout" && i + 1 < argc) {
                 timeout = std::stod(argv[++i]);
                 if (timeout <= 0) {
-                    throw ipconfig::Error("timeout must be positive");
+                    throw sitcp_sitcpxg::network_config::Error("timeout must be positive");
                 }
             } else if (arg == "-h" || arg == "--help") {
                 usage(argv[0]);
                 return 0;
             } else {
-                throw ipconfig::Error("unknown option: " + arg);
+                throw sitcp_sitcpxg::network_config::Error("unknown option: " + arg);
             }
         }
 
         std::cout << "target       : " << host << ':' << port << '\n';
-        ipconfig::show_all(host, port, timeout);
+        sitcp_sitcpxg::network_config::show_all(host, port, timeout);
         std::cout << "status       : READ OK\n";
         return 0;
     } catch (const std::exception& error) {
