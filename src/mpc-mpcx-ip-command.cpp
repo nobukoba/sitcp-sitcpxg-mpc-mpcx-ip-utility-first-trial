@@ -1,4 +1,4 @@
-#include "ip-config.hpp"
+#include "sitcp-sitcpxg-network-config.hpp"
 
 #include "mpc-mpcx-ip-command.hpp"
 
@@ -18,8 +18,8 @@ void unified_usage(const char* p) {
               << "  ip-write CURRENT_IP NEW_IP [--eeprom|--current] [--port N] [--timeout SEC]\n"
               << "  write ...  Use mpc-mpcx-ip-writer\n\n"
               << "Defaults:\n"
-              << "  --port N       RBCP UDP port (default: " << ipconfig::DEFAULT_PORT << ")\n"
-              << "  --timeout SEC  RBCP timeout in seconds (default: " << ipconfig::DEFAULT_TIMEOUT << ")\n"
+              << "  --port N       RBCP UDP port (default: " << sitcp_sitcpxg::network_config::DEFAULT_PORT << ")\n"
+              << "  --timeout SEC  RBCP timeout in seconds (default: " << sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT << ")\n"
               << "  probe LENGTH   bytes to read (default: 1)\n"
               << "  ip-write       writes EEPROM IP unless --current is specified\n";
 }
@@ -51,10 +51,10 @@ int main(int argc, char** argv) {
         const std::string cmd = argv[1];
         if (cmd == "ip-read") {
             if (argc < 3) throw std::runtime_error("usage: ip-read IP [options]");
-            uint16_t port = ipconfig::DEFAULT_PORT;
-            double timeout = ipconfig::DEFAULT_TIMEOUT;
+            uint16_t port = sitcp_sitcpxg::network_config::DEFAULT_PORT;
+            double timeout = sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT;
             parse_common(argc, argv, 3, port, timeout);
-            ipconfig::show_all(argv[2], port, timeout);
+            sitcp_sitcpxg::network_config::show_all(argv[2], port, timeout);
             return 0;
         }
 
@@ -62,9 +62,9 @@ int main(int argc, char** argv) {
             if (argc < 4) throw std::runtime_error("usage: ip-write CURRENT_IP NEW_IP [--eeprom|--current] [options]");
             const std::string host = argv[2];
             const std::string new_ip = argv[3];
-            (void)ipconfig::parse_ipv4(new_ip);
-            uint16_t port = ipconfig::DEFAULT_PORT;
-            double timeout = ipconfig::DEFAULT_TIMEOUT;
+            (void)sitcp_sitcpxg::network_config::parse_ipv4(new_ip);
+            uint16_t port = sitcp_sitcpxg::network_config::DEFAULT_PORT;
+            double timeout = sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT;
             bool current = false;
             for (int i = 4; i < argc; ++i) {
                 const std::string a = argv[i];
@@ -80,22 +80,22 @@ int main(int argc, char** argv) {
                 } else throw std::runtime_error("unknown option: " + a);
             }
             std::cout << "before:\n";
-            ipconfig::show_all(host, port, timeout, "  ");
-            if (current) ipconfig::write_current_ip(host, new_ip, port, timeout);
-            else ipconfig::write_eeprom_ip(host, new_ip, port, timeout);
+            sitcp_sitcpxg::network_config::show_all(host, port, timeout, "  ");
+            if (current) sitcp_sitcpxg::network_config::write_current_ip(host, new_ip, port, timeout);
+            else sitcp_sitcpxg::network_config::write_eeprom_ip(host, new_ip, port, timeout);
             std::cout << "after:\n";
-            ipconfig::show_all(current ? new_ip : host, port, timeout, "  ");
+            sitcp_sitcpxg::network_config::show_all(current ? new_ip : host, port, timeout, "  ");
             std::cout << "status       : WRITE/VERIFY OK\n";
             return 0;
         }
 
         if (cmd == "read") {
             if (argc < 3) throw std::runtime_error("usage: read IP [options]");
-            uint16_t port = ipconfig::DEFAULT_PORT;
-            double timeout = ipconfig::DEFAULT_TIMEOUT;
+            uint16_t port = sitcp_sitcpxg::network_config::DEFAULT_PORT;
+            double timeout = sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT;
             parse_common(argc, argv, 3, port, timeout);
             std::cout << "network configuration:\n";
-            ipconfig::show_all(argv[2], port, timeout, "  ");
+            sitcp_sitcpxg::network_config::show_all(argv[2], port, timeout, "  ");
             std::cout << "\nMPC/MPCX information:\n";
         }
 
