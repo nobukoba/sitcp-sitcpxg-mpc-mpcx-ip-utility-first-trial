@@ -175,8 +175,7 @@ This is an experimental implementation and is not an official Bee Beans Technolo
 
 ## Documentation
 
-- [Technical notes](TECHNICAL_NOTES.md) — evidence, MPC/MPCX EEPROM mappings, device-generation detection, and implementation findings.
-- [For developers](FOR_DEVELOPERS.md) — architecture, build/development notes, and testing.
+- [For developers](FOR_DEVELOPERS.md) — architecture, build/development notes, technical evidence, MPC/MPCX EEPROM mappings, device-generation detection, references, and testing.
 - [Agent instructions](AGENTS.md) — constraints for automated development.
 
-The technical notes link to the relevant Bee Beans Technologies documentation, including the SiTCPXG manual and MPC Writer XG guide.
+The developer guide includes the relevant Bee Beans Technologies documentation references, including the SiTCPXG manual and MPC Writer XG guide.
