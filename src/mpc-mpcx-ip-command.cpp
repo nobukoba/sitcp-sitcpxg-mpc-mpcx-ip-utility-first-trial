@@ -1,6 +1,6 @@
 #include "sitcp-sitcpxg-network-config.hpp"
 
-#include "mpc-mpcx-ip-command.hpp"
+#include "sitcp-sitcpxg-mpc-mpcx.hpp"
 
 namespace {
 void unified_usage(const char* p) {
