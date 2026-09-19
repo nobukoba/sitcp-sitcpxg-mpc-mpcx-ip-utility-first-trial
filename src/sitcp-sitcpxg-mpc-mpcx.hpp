@@ -58,8 +58,7 @@ std::string hex_address(uint32_t address) {
 
 void field(const std::string& name, const std::string& value) {
     std::cout << std::left << std::setw(FIELD_WIDTH)
-              << name << ": " << value << '
-';
+              << name << ": " << value << '\\n';
 }
 
 bool valid_tag(std::vector<uint8_t> b) {
@@ -140,38 +139,21 @@ TargetArgs parse_target(int argc, char** argv, int start) {
 }
 
 void usage(const char* p) {
-    std::cerr << "Usage: " << p << " COMMAND ...
-
-"
-              << "Commands:
-"
-              << "  inspect MPC_OR_MPCX_FILE
-"
-              << "  read IP [--port N] [--timeout SEC]
-"
-              << "  verify IP FILE [--port N] [--timeout SEC]
-"
-              << "  mpcx-plan IP FILE [--port N] [--timeout SEC]
-"
-              << "  probe IP ADDRESS [LENGTH] [--port N] [--timeout SEC]
-"
-              << "  rbcp-read IP ADDRESS LENGTH [--port N] [--timeout SEC]
-"
-              << "  rbcp-write IP ADDRESS HEX-BYTES [--port N] [--timeout SEC]
-"
-              << "  clear IP --yes-really-clear [--port N] [--timeout SEC]
-"
-              << "  write IP FILE [--port N] [--timeout SEC]  (use mpc-mpcx-ip-writer)
-
-"
-              << "Defaults:
-"
-              << "  --port N       RBCP UDP port (default: " << DEFAULT_PORT << ")
-"
-              << "  --timeout SEC  RBCP timeout in seconds (default: " << DEFAULT_TIMEOUT << ")
-"
-              << "  probe LENGTH   bytes to read (default: 1)
-";
+    std::cerr << "Usage: " << p << " COMMAND ...\\n\\n"
+              << "Commands:\\n"
+              << "  inspect MPC_OR_MPCX_FILE\\n"
+              << "  read IP [--port N] [--timeout SEC]\\n"
+              << "  verify IP FILE [--port N] [--timeout SEC]\\n"
+              << "  mpcx-plan IP FILE [--port N] [--timeout SEC]\\n"
+              << "  probe IP ADDRESS [LENGTH] [--port N] [--timeout SEC]\\n"
+              << "  rbcp-read IP ADDRESS LENGTH [--port N] [--timeout SEC]\\n"
+              << "  rbcp-write IP ADDRESS HEX-BYTES [--port N] [--timeout SEC]\\n"
+              << "  clear IP --yes-really-clear [--port N] [--timeout SEC]\\n"
+              << "  write IP FILE [--port N] [--timeout SEC]  (use mpc-mpcx-ip-writer)\\n\\n"
+              << "Defaults:\\n"
+              << "  --port N       RBCP UDP port (default: " << DEFAULT_PORT << ")\\n"
+              << "  --timeout SEC  RBCP timeout in seconds (default: " << DEFAULT_TIMEOUT << ")\\n"
+              << "  probe LENGTH   bytes to read (default: 1)\\n";
 }
 }
 
@@ -243,12 +225,10 @@ inline int run_mpc_mpcx_command(int argc, char** argv) {
         }
 
         if (cmd == "write") {
-            std::cerr << "Use mpc-mpcx-ip-writer for the verified high-level write path.
-";
+            std::cerr << "Use mpc-mpcx-ip-writer for the verified high-level write path.\\n";
             return 8;
         }
 
         throw Error("unknown command: " + cmd);
-    } catch (const std::exception& e) { std::cerr << "ERROR: " << e.what() << '
-'; return 1; }
+    } catch (const std::exception& e) { std::cerr << "ERROR: " << e.what() << '\\n'; return 1; }
 }
