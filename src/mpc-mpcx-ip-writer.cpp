@@ -27,22 +27,35 @@ using RbcpError = rbcp::Error;
 using RbcpTimeout = rbcp::Timeout;
 using RbcpBusError = rbcp::BusError;
 
-std::vector<uint8_t> read_exact(RbcpClient& c, uint32_t addr, size_t len, size_t chunk = 8) {
-    std::vector<uint8_t> out;
-    for (size_t off = 0; off < len; off += chunk) {
-        const size_t n = std::min(chunk, len - off);
-        auto block = rbcp::read_retry(c, addr + static_cast<uint32_t>(off), n);
-        out.insert(out.end(), block.begin(), block.end());
+std::vector<uint8_t> read_exact(
+    RbcpClient& client, uint32_t address, size_t length,
+    size_t chunk_size = 8) {
+    std::vector<uint8_t> data;
+    for (size_t offset = 0; offset < length; offset += chunk_size) {
+        const size_t block_size =
+            std::min(chunk_size, length - offset);
+        const std::vector<uint8_t> block = rbcp::read_retry(
+            client, address + static_cast<uint32_t>(offset), block_size);
+        data.insert(data.end(), block.begin(), block.end());
     }
-    return out;
+    return data;
 }
 
-void write_exact(RbcpClient& c, uint32_t addr, const std::vector<uint8_t>& data, size_t chunk = 16) {
-    for (size_t off = 0; off < data.size(); off += chunk) {
-        const size_t n = std::min(chunk, data.size() - off);
-        const std::vector<uint8_t> block(data.begin() + off, data.begin() + off + n);
-        const auto ack = c.write(addr + static_cast<uint32_t>(off), block);
-        if (ack.size() != n) throw RbcpError("short RBCP ACK while writing EEPROM");
+void write_exact(
+    RbcpClient& client, uint32_t address,
+    const std::vector<uint8_t>& data, size_t chunk_size = 16) {
+    for (size_t offset = 0; offset < data.size(); offset += chunk_size) {
+        const size_t block_size =
+            std::min(chunk_size, data.size() - offset);
+        const std::vector<uint8_t> block(
+            data.begin() + offset,
+            data.begin() + offset + block_size);
+        const std::vector<uint8_t> ack = client.write(
+            address + static_cast<uint32_t>(offset), block);
+        if (ack.size() != block_size) {
+            throw RbcpError(
+                "short RBCP ACK while writing EEPROM");
+        }
     }
 }
 
@@ -67,13 +80,23 @@ void field(const std::string& name, const std::string& value) {
               << name << ": " << value << '\n';
 }
 
-bool valid_tag(const std::vector<uint8_t>& b) {
-    if (b.size() != 7) return false;
-    for (const uint8_t x : b) {
-        if (x == 0 || x == 0x20 || x == '-') continue;
-        if (x >= '0' && x <= '9') continue;
-        const uint8_t u = static_cast<uint8_t>(x & 0xDF);
-        if (u >= 'A' && u <= 'Z') continue;
+bool valid_tag(const std::vector<uint8_t>& tag) {
+    if (tag.size() != 7) {
+        return false;
+    }
+
+    for (size_t i = 0; i < tag.size(); ++i) {
+        const uint8_t value = tag[i];
+        if (value == 0 || value == 0x20 || value == '-' ||
+            (value >= '0' && value <= '9')) {
+            continue;
+        }
+
+        const uint8_t uppercase =
+            static_cast<uint8_t>(value & 0xDF);
+        if (uppercase >= 'A' && uppercase <= 'Z') {
+            continue;
+        }
         return false;
     }
     return true;
@@ -91,9 +114,15 @@ std::vector<uint8_t> decode_nonzero(const std::vector<uint8_t>& d, size_t begin,
 }
 
 int classify_payload(const std::vector<uint8_t>& data) {
-    if (data.size() != MPC_FILE_SIZE) return 0;
-    if (valid_tag(decode_nonzero(data, 6, 7, 0x34))) return 2;
-    if (valid_tag(decode_nonzero(data, 0, 7, 0x2C))) return 1;
+    if (data.size() != MPC_FILE_SIZE) {
+        return 0;
+    }
+    if (valid_tag(decode_nonzero(data, 6, 7, 0x34))) {
+        return 2;
+    }
+    if (valid_tag(decode_nonzero(data, 0, 7, 0x2C))) {
+        return 1;
+    }
     return 0;
 }
 
@@ -123,9 +152,14 @@ int detect_target(RbcpClient& c, std::string& why) {
 }
 
 std::vector<uint8_t> read_file(const std::string& path) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f) throw std::runtime_error("cannot open file: " + path);
-    return std::vector<uint8_t>((std::istreambuf_iterator<char>(f)), {});
+    std::ifstream input(path.c_str(), std::ios::binary);
+    if (!input) {
+        throw std::runtime_error("cannot open file: " + path);
+    }
+
+    return std::vector<uint8_t>(
+        std::istreambuf_iterator<char>(input),
+        std::istreambuf_iterator<char>());
 }
 
 void set_write_enable(RbcpClient& c, bool enabled) {
@@ -136,7 +170,8 @@ void set_write_enable(RbcpClient& c, bool enabled) {
     }
 }
 
-std::vector<uint8_t> program(RbcpClient& c, const std::vector<uint8_t>& payload, int type) {
+std::vector<uint8_t> program(
+    RbcpClient& c, const std::vector<uint8_t>& payload, int type) {
     std::vector<uint8_t> image;
     if (type == 1) {
         image = read_exact(c, EEPROM_BASE, 24);
@@ -163,7 +198,9 @@ std::vector<uint8_t> program(RbcpClient& c, const std::vector<uint8_t>& payload,
     const auto actual = read_exact(c, EEPROM_BASE, image.size());
     if (actual != image) {
         size_t i = 0;
-        while (i < image.size() && actual[i] == image[i]) ++i;
+        while (i < image.size() && actual[i] == image[i]) {
+            ++i;
+        }
         std::ostringstream os;
         os << "EEPROM read-back verification failed";
         if (i < image.size()) {
@@ -196,8 +233,8 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
             return 2;
         }
 
-        std::string ip = argv[1];
-        std::string file_path = argv[2];
+        const std::string ip = argv[1];
+        const std::string file_path = argv[2];
         uint16_t port = DEFAULT_PORT;
         double timeout = DEFAULT_TIMEOUT;
 
@@ -205,11 +242,15 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
             const std::string a = argv[i];
             if (a == "--port" && i + 1 < argc) {
                 const unsigned long p = std::stoul(argv[++i]);
-                if (p == 0 || p > 65535) throw std::runtime_error("invalid port");
+                if (p == 0 || p > 65535) {
+                    throw std::runtime_error("invalid port");
+                }
                 port = static_cast<uint16_t>(p);
             } else if (a == "--timeout" && i + 1 < argc) {
                 timeout = std::stod(argv[++i]);
-                if (timeout <= 0) throw std::runtime_error("timeout must be positive");
+                if (timeout <= 0) {
+                    throw std::runtime_error("timeout must be positive");
+                }
             } else if (a == "-h" || a == "--help") {
                 usage(argv[0]);
                 return 0;
