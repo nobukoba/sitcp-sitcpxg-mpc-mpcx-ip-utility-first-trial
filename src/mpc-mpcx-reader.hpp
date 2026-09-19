@@ -105,7 +105,12 @@ return 2;}
 catch(const Timeout&){w="XG register probe: timeout";
 return -1;}}
 void usage(const char*a){
-std::cerr << "Usage: " << a << " <ip> [options]\\n\\n"\n          << "Options:\\n"\n          << "  --port N       RBCP UDP port (default: " << DEFAULT_PORT << ")\\n"\n          << "  --timeout SEC  RBCP timeout in seconds (default: " << DEFAULT_TIMEOUT << ")\\n"\n          << "  -h, --help     Show this help\\n";\n}
+std::cerr << "Usage: " << a << " <ip> [options]\\n\\n"
+          << "Options:\\n"
+          << "  --port N       RBCP UDP port (default: " << DEFAULT_PORT << ")\\n"
+          << "  --timeout SEC  RBCP timeout in seconds (default: " << DEFAULT_TIMEOUT << ")\\n"
+          << "  -h, --help     Show this help\\n";
+}
 }
 inline int run_mpc_mpcx_reader(int ac,char**av){
 try{
