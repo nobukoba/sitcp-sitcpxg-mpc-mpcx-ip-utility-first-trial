@@ -93,7 +93,9 @@ void show_xg_parameters(const std::vector<uint8_t>& eeprom) {
     std::ostringstream disconnect;
     disconnect << disconnect_timeout << " ("
                << std::fixed << std::setprecision(3)
-               << disconnect_seconds << " s)";
+               << disconnect_seconds << " s, "
+               << std::setprecision(2)
+               << disconnect_seconds / 60.0 << " min)";
 
     std::ostringstream msl_value;
     msl_value << msl << " ("
@@ -116,8 +118,15 @@ void show_xg_parameters(const std::vector<uint8_t>& eeprom) {
     field("server MAC", format_mac(eeprom, 0x32));
     field("server IP", format_ipv4(eeprom, 0x38));
     field("server TCP port", std::to_string(be16(eeprom, 0x3C)));
-    field("transmission rate",
-          std::to_string(be16(eeprom, 0x40)) + " Mbps");
+    const uint16_t transmission_rate = be16(eeprom, 0x40);
+    if (transmission_rate >= 1 && transmission_rate <= 10000) {
+        field("transmission rate",
+              std::to_string(transmission_rate) + " Mbps");
+    } else {
+        field("transmission rate",
+              std::to_string(transmission_rate) +
+              " (outside documented range 1..10000 Mbps)");
+    }
 }
 
 std::string type_name(int type) {
