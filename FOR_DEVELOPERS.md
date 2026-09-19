@@ -159,6 +159,38 @@ normal SiTCP 192.168.2.161:
 
 These mappings belong only to MPC/MPCX handling and must not be used as the basis of IP-only operations.
 
+## SiTCP-XG EEPROM parameter area
+
+The public SiTCP-XG manual documents `0xFFFFFC10..0xFFFFFC4F` as the
+EEPROM initial values for runtime registers `0xFFFFFF10..0xFFFFFF4F`.
+Therefore, bytes in this range are device/network configuration and must not
+be normalized merely because two boards differ.
+
+Relevant documented runtime fields include:
+
+```text
+FC18..FC1B  IP address
+FC1C..FC1D  TCP port
+FC20..FC21  TCP maximum segment size
+FC22..FC23  UDP port
+FC24..FC25  TCP keepalive time (buffer not empty)
+FC26..FC27  TCP keepalive time (buffer empty)
+FC28..FC29  TCP timeout (connecting)
+FC2A..FC2B  TCP timeout (disconnect)
+FC2C..FC2D  TCP maximum segment lifetime
+FC2E..FC2F  TCP retransmission time
+FC32..FC37  TCP server MAC address
+FC38..FC3B  TCP server IP address
+FC3C..FC3D  TCP server port
+FC40..FC41  transmission rate
+```
+
+For MPCX programming, the verified 22-byte payload mapping changes only
+`FC00..FC0F` and `FC12..FC17`; `FC10..FC11` are preserved. The writer
+must also preserve `FC18` and later configuration bytes. In particular,
+different values observed at FC20/FC2A/FC40 on different SiTCP-XG boards are
+not evidence of a bad MPCX payload.
+
 ## MPC/MPCX write sequence
 
 1. Read the current EEPROM image needed for the target generation.
