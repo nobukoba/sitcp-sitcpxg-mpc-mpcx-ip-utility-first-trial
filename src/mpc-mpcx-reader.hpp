@@ -88,7 +88,7 @@ std::ostringstream o;o<<std::hex<<std::setfill('0');
 for(size_t i=a;i<z;i++){
 if(i>a)o<<s;o<<std::setw(2)<<(unsigned)d[i];}
 return o.str();} void field(std::string k,std::string v){
-std::cout<<std::left<<std::setw(FW)<<k<<": "<<v<<'\\n';}
+std::cout<<std::left<<std::setw(FW)<<k<<": "<<v<<'\n';}
 std::string tn(int t){
 return t==1?"MPCX (SiTCP-XG)":t==2?"MPC (normal SiTCP)":t==-1?"ambiguous":"unknown";}
 int detect(Client&c,const std::vector<uint8_t>&e,std::string&w){
@@ -105,11 +105,11 @@ return 2;}
 catch(const Timeout&){w="XG register probe: timeout";
 return -1;}}
 void usage(const char*a){
-std::cerr << "Usage: " << a << " <ip> [options]\\n\\n"
-          << "Options:\\n"
-          << "  --port N       RBCP UDP port (default: " << DEFAULT_PORT << ")\\n"
-          << "  --timeout SEC  RBCP timeout in seconds (default: " << DEFAULT_TIMEOUT << ")\\n"
-          << "  -h, --help     Show this help\\n";
+std::cerr << "Usage: " << a << " <ip> [options]\n\n"
+          << "Options:\n"
+          << "  --port N       RBCP UDP port (default: " << DEFAULT_PORT << ")\n"
+          << "  --timeout SEC  RBCP timeout in seconds (default: " << DEFAULT_TIMEOUT << ")\n"
+          << "  -h, --help     Show this help\n";
 }
 }
 inline int run_mpc_mpcx_reader(int ac,char**av){
@@ -136,9 +136,9 @@ if(!p.empty())field("reconstructed payload",hex(p));
 if(t==1){field("MPCX FC00..FC0F",hex(e,0,16));field("MAC",hex(e,0x12,0x18,':'));}
 else if(t==2){field("MAC",hex(e,0x12,0x18,':'));field("MPC FC40..FC4F",hex(e,0x40,0x50));}
 field("EEPROM IP",std::to_string(e[0x18])+"."+std::to_string(e[0x19])+"."+std::to_string(e[0x1a])+"."+std::to_string(e[0x1b]));field("status","READ OK");
-std::cout << "raw EEPROM FC00..FC4F:\\n";
-for(size_t o=0;o<e.size();o+=16)std::cout<<std::hex<<std::uppercase<<std::setw(8)<<std::setfill('0')<<(EEPROM_BASE+o)<<": "<<hex(e,o,std::min(o+16,e.size()))<<'\\n';
+std::cout << "raw EEPROM FC00..FC4F:\n";
+for(size_t o=0;o<e.size();o+=16)std::cout<<std::hex<<std::uppercase<<std::setw(8)<<std::setfill('0')<<(EEPROM_BASE+o)<<": "<<hex(e,o,std::min(o+16,e.size()))<<'\n';
 return 0;}
 catch(const std::exception&e){
-std::cerr<<"ERROR: "<<e.what()<<'\\n';
+std::cerr<<"ERROR: "<<e.what()<<'\n';
 return 1;}}
