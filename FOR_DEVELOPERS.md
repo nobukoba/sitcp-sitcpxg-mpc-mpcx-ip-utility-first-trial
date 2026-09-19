@@ -240,3 +240,14 @@ Hardware-destructive tests should only be run on a controlled target where recov
 - verify EEPROM IP write/read-back;
 - verify optional current/runtime IP change and reconnect;
 - test normal SiTCP and SiTCP-XG independently.
+
+## MPC/MPCX file inspection and MAC extraction
+
+`mpc-mpcx-ip-command` uses `MPC_OR_MPCX_FILE` in help text instead of the ambiguous `FILE`. It means a 22-byte `.mpc` or `.mpcx` license/configuration file.
+
+```text
+mpc-mpcx-ip-command inspect MPC_OR_MPCX_FILE
+mpc-mpcx-ip-command mac MPC_OR_MPCX_FILE
+```
+
+For verified payload layouts, the embedded MAC address is `payload[0:6]` for normal SiTCP/MPC and `payload[16:22]` for SiTCP-XG/MPCX. `inspect` reports the detected payload type, embedded MAC, and payload; `mac` reports the detected type and embedded MAC.
