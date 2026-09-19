@@ -6,7 +6,7 @@ namespace {
 void unified_usage(const char* p) {
     std::cerr << "Usage: " << p << " COMMAND ...\n\n"
               << "Commands:\n"
-              << "  inspect FILE\n"
+              << "  inspect MPC_OR_MPCX_FILE\n"
               << "  read IP [--port N] [--timeout SEC]\n"
               << "  verify IP FILE [--port N] [--timeout SEC]\n"
               << "  mpcx-plan IP FILE [--port N] [--timeout SEC]\n"
