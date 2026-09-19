@@ -1,8 +1,6 @@
 #include "ip-config.hpp"
 
-#define main run_mpc_mpcx_reader
-#include "mpc-mpcx-reader.cpp"
-#undef main
+#include "mpc-mpcx-reader.hpp"
 
 namespace {
 void unified_usage(const char* p) {
