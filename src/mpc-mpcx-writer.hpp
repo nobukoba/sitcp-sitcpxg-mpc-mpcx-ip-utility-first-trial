@@ -204,18 +204,6 @@ std::string type_name(int t) {
            t == -1 ? "ambiguous" : "unknown";
 }
 
-std::vector<uint8_t> reconstruct_xg(const std::vector<uint8_t>& e) {
-    std::vector<uint8_t> p(e.begin(), e.begin() + 16);
-    p.insert(p.end(), e.begin() + 18, e.begin() + 24);
-    return p;
-}
-
-std::vector<uint8_t> reconstruct_normal(const std::vector<uint8_t>& e) {
-    std::vector<uint8_t> p(e.begin() + 0x12, e.begin() + 0x18);
-    p.insert(p.end(), e.begin() + 0x40, e.begin() + 0x50);
-    return p;
-}
-
 int detect_target(RbcpClient& c, std::string& why) {
     try {
         const auto identifier = read_retry(c, XG_IDENTIFIER, 4);
