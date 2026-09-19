@@ -46,6 +46,27 @@ void write_exact(RbcpClient& c, uint32_t addr, const std::vector<uint8_t>& data,
     }
 }
 
+std::string hex_bytes(const std::vector<uint8_t>& data,
+                      size_t begin = 0, size_t end = SIZE_MAX,
+                      char separator = ' ') {
+    end = std::min(end, data.size());
+
+    std::ostringstream output;
+    output << std::hex << std::setfill('0');
+    for (size_t i = begin; i < end; ++i) {
+        if (i != begin) {
+            output << separator;
+        }
+        output << std::setw(2) << static_cast<unsigned>(data[i]);
+    }
+    return output.str();
+}
+
+void field(const std::string& name, const std::string& value) {
+    std::cout << std::left << std::setw(FIELD_WIDTH)
+              << name << ": " << value << '\n';
+}
+
 bool valid_tag(const std::vector<uint8_t>& b) {
     if (b.size() != 7) return false;
     for (const uint8_t x : b) {
