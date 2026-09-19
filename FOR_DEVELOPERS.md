@@ -62,7 +62,7 @@ A common RBCP transport helper may be shared, but MPC/MPCX payload logic must no
 
 ## Public references
 
-For generation detection, the authoritative public reference is the Bee Beans Technologies SiTCPXG manual, section 4.2.3. It defines the read-only SiTCPXG Identifier register as `0x58544350`.
+For generation detection, the authoritative public reference is the Bee Beans Technologies SiTCP-XG manual, section 4.2.3. It defines the read-only SiTCP-XG Identifier register as `0x58544350`.
 
 - Bee Beans Technologies SiTCP downloads: https://www.bbtech.co.jp/download-files/sitcp/index_en.html
 - SiTCP MPC Writer XG guide: https://www.bbtech.co.jp/download-files/sitcp/SiTCP-MPC-Writer-XG-en.0.1.1.pdf
@@ -192,7 +192,7 @@ Requirements:
 
 ## Refactoring direction
 
-Shared low-level pieces may eventually be separated into modules such as `rbcp`, `mpc_mpcx`, and `sitcp_ip`. Do not create a generic abstraction that silently mixes MPC/MPCX license layout with IP configuration layout.
+Shared code is separated into `sitcp-sitcpxg-rbcp.hpp` (RBCP transport), `sitcp-sitcpxg-network-config.hpp` (network configuration), and `sitcp-sitcpxg-mpc-mpcx.hpp` (MPC/MPCX operations). Keep these boundaries explicit; do not create a generic abstraction that silently mixes MPC/MPCX license layout with IP configuration layout.
 
 ## Testing
 
@@ -201,7 +201,7 @@ At minimum, test:
 - C++11 builds with GCC and Clang where available;
 - all five executables are built and installed by `make install`;
 - MPC/MPCX classifier and verified EEPROM mappings remain unchanged;
-- generation detection uses the documented SiTCPXG Identifier;
+- generation detection uses the documented SiTCP-XG Identifier;
 - `mpc-mpcx-ip-command` subcommands and safety guards;
 - standalone IP reader/writer do not depend on an MPC/MPCX file;
 - EEPROM IP write read-back;
@@ -220,7 +220,7 @@ Hardware-destructive tests should only be run on a controlled target where recov
 | MPC/MPCX content classifier | not found | yes | yes |
 | XG 16 + preserve 2 + 6 mapping | not found | yes | yes |
 | normal 6 + 16 mapping | not found in reviewed material | investigated | yes |
-| SiTCPXG Identifier generation detection | yes | implemented | verified on XG hardware |
+| SiTCP-XG Identifier generation detection | yes | implemented | verified on XG hardware |
 | IP-only current/runtime read mechanism | to investigate | to investigate | not yet verified |
 | IP-only EEPROM/default read mechanism | to investigate | to investigate | not yet verified |
 | IP-only EEPROM write mechanism | to investigate | to investigate | not yet verified |
