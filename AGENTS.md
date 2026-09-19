@@ -75,7 +75,7 @@ Keep C++ source readable and conventionally formatted.
 - Default timeout: 3 seconds; retain `--timeout` where applicable.
 - Detect MPC versus MPCX from the 22-byte payload, never from the filename extension.
 - Detect SiTCP versus SiTCP-XG automatically where appropriate.
-- For MPC/MPCX generation disambiguation, if both reconstructed EEPROM layouts classify as valid, use the documented read-only SiTCPXG Identifier register at `0xFFFFFF08..0xFFFFFF0B`; only an exact value of `0x58544350` identifies SiTCP-XG.
+- Determine the target generation first from the documented read-only SiTCPXG Identifier register at `0xFFFFFF08..0xFFFFFF0B`; only an exact value of `0x58544350` identifies SiTCP-XG. Keep generation detection separate from MPC/MPCX payload classification.
 - Do not use the former experimental `0xFFFFFF50` probe as a SiTCP-XG generation identifier.
 - Do not infer the device generation solely from FC00/FC40 payload-looking data: verified hardware shows stale/alternate-layout data can make both reconstructed payloads classify as valid.
 - EEPROM writes must restore write protection even after failures where that mechanism applies.
