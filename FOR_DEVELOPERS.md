@@ -136,7 +136,7 @@ normal SiTCP:
 
 These mappings belong to MPC/MPCX handling and must not be used as the basis of the standalone IP utility implementation.
 
-When both reconstructed layouts classify as valid, do not infer the generation from FC00/FC40 contents alone. Read the documented SiTCPXG Identifier register at `0xFFFFFF08..0xFFFFFF0B`; an exact value of `0x58544350` identifies SiTCP-XG. Do not restore the former experimental `0xFFFFFF50` probe.
+Determine the target generation first by reading the documented SiTCPXG Identifier register at `0xFFFFFF08..0xFFFFFF0B`; an exact value of `0x58544350` identifies SiTCP-XG. Keep this independent of MPC/MPCX payload classification. Do not infer generation from FC00/FC40 contents, and do not restore the former experimental `0xFFFFFF50` probe.
 
 ## IP utility design
 
