@@ -33,6 +33,34 @@ std::vector<uint8_t> read_exact(RbcpClient& c, uint32_t addr, size_t len) {
     return out;
 }
 
+std::string hex_bytes(const std::vector<uint8_t>& data,
+                      size_t begin = 0, size_t end = SIZE_MAX,
+                      char separator = ' ') {
+    end = std::min(end, data.size());
+
+    std::ostringstream output;
+    output << std::hex << std::setfill('0');
+    for (size_t i = begin; i < end; ++i) {
+        if (i != begin) {
+            output << separator;
+        }
+        output << std::setw(2) << static_cast<unsigned>(data[i]);
+    }
+    return output.str();
+}
+
+std::string hex_address(uint32_t address) {
+    std::ostringstream output;
+    output << "0x" << std::hex << std::uppercase
+           << std::setw(8) << std::setfill('0') << address;
+    return output.str();
+}
+
+void field(const std::string& name, const std::string& value) {
+    std::cout << std::left << std::setw(FIELD_WIDTH)
+              << name << ": " << value << '\n';
+}
+
 bool valid_tag(std::vector<uint8_t> b) {
     if (b.size() != 7) {\n        return false;\n    }
     for (auto x : b) {
@@ -65,7 +93,7 @@ std::vector<uint8_t> payload_mac(const std::vector<uint8_t>& d) {
 }
 
 std::string mac_string(const std::vector<uint8_t>& mac) {
-    return hex_bytes(mac, ':');
+    return hex_bytes(mac, 0, mac.size(), ':');
 }
 
 std::vector<uint8_t> read_file(const std::string& path) {
