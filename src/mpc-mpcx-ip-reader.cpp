@@ -1,4 +1,4 @@
-#include "ip-config.hpp"
+#include "sitcp-sitcpxg-network-config.hpp"
 
 #include "mpc-mpcx-ip-reader.hpp"
 
@@ -8,8 +8,8 @@ void unified_usage(const char* p) {
               << "Reads MPC/MPCX EEPROM information and always displays both\n"
               << "current and EEPROM MAC/IP configuration.\n\n"
               << "Options:\n"
-              << "  --port N       RBCP UDP port (default: " << ipconfig::DEFAULT_PORT << ")\n"
-              << "  --timeout SEC  RBCP timeout in seconds (default: " << ipconfig::DEFAULT_TIMEOUT << ")\n"
+              << "  --port N       RBCP UDP port (default: " << sitcp_sitcpxg::network_config::DEFAULT_PORT << ")\n"
+              << "  --timeout SEC  RBCP timeout in seconds (default: " << sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT << ")\n"
               << "  -h, --help     Show this help\n";
 }
 }
@@ -22,8 +22,8 @@ int main(int argc, char** argv) {
         }
 
         const std::string host = argv[1];
-        uint16_t port = ipconfig::DEFAULT_PORT;
-        double timeout = ipconfig::DEFAULT_TIMEOUT;
+        uint16_t port = sitcp_sitcpxg::network_config::DEFAULT_PORT;
+        double timeout = sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT;
         for (int i = 2; i < argc; ++i) {
             const std::string a = argv[i];
             if (a == "--port" && i + 1 < argc) {
@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
         }
 
         std::cout << "network configuration:\n";
-        ipconfig::show_all(host, port, timeout, "  ");
+        sitcp_sitcpxg::network_config::show_all(host, port, timeout, "  ");
         std::cout << "\nMPC/MPCX information:\n";
         return run_mpc_mpcx_reader(argc, argv);
     } catch (const std::exception& e) {
