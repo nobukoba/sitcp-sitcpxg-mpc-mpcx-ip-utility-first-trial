@@ -121,7 +121,7 @@ Reads may be retried after timeout. EEPROM writes must not be blindly retried be
 
 ## MPC/MPCX EEPROM mappings
 
-See `REVERSE_ENGINEERING.md` for evidence and details. Current verified mappings are:
+See `TECHNICAL_NOTES.md` for evidence and details. Current verified mappings are:
 
 ```text
 SiTCP-XG:
