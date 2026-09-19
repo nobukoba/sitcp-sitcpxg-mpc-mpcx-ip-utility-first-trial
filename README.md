@@ -127,10 +127,11 @@ The IP-only commands share the low-level IP register helper but do not read or r
 ./bin/mpc-mpcx-ip-command --help
 ```
 
-Important subcommands include:
+Important subcommands include (MPC_OR_MPCX_FILE means a `.mpc` or `.mpcx` license/configuration file):
 
 ```text
-inspect FILE
+inspect MPC_OR_MPCX_FILE
+mac MPC_OR_MPCX_FILE
 read IP [--port N] [--timeout SEC]
 verify IP FILE [--port N] [--timeout SEC]
 mpcx-plan IP FILE [--port N] [--timeout SEC]
