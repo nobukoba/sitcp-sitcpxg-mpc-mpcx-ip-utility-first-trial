@@ -196,6 +196,50 @@ must also preserve `FC18` and later configuration bytes. In particular,
 different values observed at FC20/FC2A/FC40 on different SiTCP-XG boards are
 not evidence of a bad MPCX payload.
 
+## Observed SiTCP-XG FC40..FC4F case
+
+A SiTCP-XG target at `192.168.2.187` was observed with a valid XG
+identifier (`0x58544350`) and an MPCX payload that reconstructs exactly
+from `FC00..FC0F + FC12..FC17`.  Its EEPROM nevertheless contains:
+
+```text
+FC40..FC4F =
+83 A8 9C 99 A6 54 54 35 34 4C 38 39 FD 57 08 09
+```
+
+A non-destructive read of `0xFFFFFF40..0xFFFFFF4F` returned the same
+16 bytes.  Therefore these bytes are not merely an unread EEPROM remnant;
+they are also visible in the corresponding runtime register window.
+
+The first 12 bytes,
+
+```text
+83 A8 9C 99 A6 54 54 35 34 4C 38 39
+```
+
+also exactly match the 12-byte portion observed in multiple verified normal
+SiTCP `.mpc` files, whose layout is `MAC[6] + common[12] + varying[4]`.
+This is strong empirical evidence that the observed `FC40..FC4F` contents
+have a normal-MPC-formatted origin.  It is not proof of the device's write
+history, and the final four bytes have not been decoded.
+
+In particular, this observation does **not** mean that the attached MPCX
+file was accidentally interpreted as an MPC file.  If the verified MPCX
+payload for this target were mapped using the normal-MPC layout,
+`FC40..FC4F` would instead contain `payload[6..21]`, which does not match
+the observed bytes.
+
+The public XG register map documents `FC40..FC41` as the EEPROM initial
+value for the transmission-rate register, with a documented range of
+1..10000.  The observed raw value `0x83A8` is 33704 and is outside that
+range.  Do not report it as an effective rate of 33704 Mbps.  More
+importantly, do not normalize, clear, or replace `FC40..FC4F` during MPCX
+programming.  The verified MPCX mapping does not require writing this area.
+
+A plausible history is that normal-MPC-formatted data was written to this
+area before a later MPCX programming operation.  This remains a hypothesis,
+not a verified fact.
+
 ## MPC/MPCX write sequence
 
 1. Read the current EEPROM image needed for the target generation.
