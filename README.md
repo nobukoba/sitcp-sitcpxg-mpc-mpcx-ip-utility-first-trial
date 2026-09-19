@@ -58,7 +58,7 @@ EEPROM IP
 
 and then reads/decodes the MPC/MPCX EEPROM information.
 
-When both EEPROM layouts look like valid MPC/MPCX payloads, the reader disambiguates the device generation using the documented SiTCPXG Identifier register at `0xFFFFFF08..0xFFFFFF0B`. An exact value of `0x58544350` identifies SiTCP-XG. This avoids relying on stale data that may remain in the unused EEPROM layout.
+The reader determines the device generation first from the documented SiTCPXG Identifier register at `0xFFFFFF08..0xFFFFFF0B`. An exact value of `0x58544350` identifies SiTCP-XG. MPC/MPCX payload classification is handled separately and is not used to determine the device generation.
 
 ## Writer
 
