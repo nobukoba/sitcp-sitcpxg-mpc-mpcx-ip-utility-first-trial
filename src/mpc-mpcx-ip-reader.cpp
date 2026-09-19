@@ -1,6 +1,6 @@
 #include "ip-config.hpp"
 
-#define main mpc_mpcx_reader_legacy_main
+#define main run_mpc_mpcx_reader
 #include "mpc-mpcx-reader.cpp"
 #undef main
 
@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
         std::cout << "network configuration:\n";
         ipconfig::show_all(host, port, timeout, "  ");
         std::cout << "\nMPC/MPCX information:\n";
-        return mpc_mpcx_reader_legacy_main(argc, argv);
+        return run_mpc_mpcx_reader(argc, argv);
     } catch (const std::exception& e) {
         std::cerr << "ERROR: " << e.what() << '\n';
         return 1;
