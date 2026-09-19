@@ -52,7 +52,7 @@ std::string hex_bytes(const std::vector<uint8_t>& data,
     end = std::min(end, data.size());
 
     std::ostringstream output;
-    output << std::hex << std::setfill('0');
+    output << std::hex << std::uppercase << std::setfill('0');
     for (size_t i = begin; i < end; ++i) {
         if (i != begin) {
             output << separator;
