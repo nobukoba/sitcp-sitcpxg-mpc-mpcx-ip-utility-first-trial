@@ -9,8 +9,8 @@ void usage(const char* program) {
     std::cerr
         << "Usage: " << program << " IP [options]\n\n"
         << "Options:\n"
-        << "  --port N       RBCP UDP port (default: "\n        << sitcp_sitcpxg::network_config::DEFAULT_PORT << ")\n"
-        << "  --timeout SEC  RBCP timeout in seconds (default: "\n        << sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT << ")\n"
+        << "  --port N       RBCP UDP port (default: "\n        << sitcp_sitcpxg::network_config::DEFAULT_PORT << ")\\n"
+        << "  --timeout SEC  RBCP timeout in seconds (default: "\n        << sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT << ")\\n"
         << "  -h, --help     Show this help\n";
 }
 
