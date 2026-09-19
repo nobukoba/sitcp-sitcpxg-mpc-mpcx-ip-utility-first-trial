@@ -15,7 +15,7 @@ For each domain, keep three evidence classes distinct:
 
 ## Public references
 
-For generation detection, the authoritative public reference is the Bee Beans Technologies SiTCPXG manual, section 4.2.3. It defines the read-only SiTCPXG Identifier register as `0x58544350`. The current implementation reads that identifier at `0xFFFFFF08..0xFFFFFF0B` when EEPROM payload reconstruction is ambiguous. The former experimental `0xFFFFFF50` probe must not be used as a generation identifier.
+For generation detection, the authoritative public reference is the Bee Beans Technologies SiTCPXG manual, section 4.2.3. It defines the read-only SiTCPXG Identifier register as `0x58544350`. The current implementation reads that identifier at `0xFFFFFF08..0xFFFFFF0B` first, independently of MPC/MPCX payload classification. The former experimental `0xFFFFFF50` probe must not be used as a generation identifier.
 
 
 - Bee Beans Technologies SiTCP downloads: https://www.bbtech.co.jp/download-files/sitcp/index_en.html
@@ -99,17 +99,15 @@ This is a separate layout from SiTCP-XG and must remain a distinct MPC/MPCX impl
 
 ## MPC/MPCX device generation detection
 
-The current MPC/MPCX implementation reconstructs both possible 22-byte payloads from EEPROM and runs the recovered classifier. If only one mapping is valid, that identifies the target generation.
-
-Real-device comparison showed that both reconstructed payloads can classify as valid at the same time: a SiTCP-XG target may retain normal-layout-looking data at FC40..FC4F, and a normal SiTCP target may also contain XG-layout-looking data at FC00..FC0F. Therefore payload classification alone is not sufficient to disambiguate those cases.
-
-For ambiguous payloads, use the documented SiTCPXG Identifier register:
+Target-generation detection is independent of MPC/MPCX payload classification. The implementation first reads the documented SiTCPXG Identifier register:
 
 ```text
 0xFFFFFF08..0xFFFFFF0B = 0x58544350
 ```
 
-An exact identifier match selects SiTCP-XG. A bus error or identifier mismatch falls back to the normal mapping only when the normal reconstructed payload is valid. A timeout remains unresolved. The previous experimental probe at `0xFFFFFF50` was removed because it is not a documented SiTCPXG identification register.
+An exact identifier match selects SiTCP-XG. A bus error or identifier mismatch selects normal SiTCP. A timeout leaves the generation unresolved. The previous experimental probe at `0xFFFFFF50` must not be used.
+
+EEPROM payload classification is still used to validate/reconstruct MPC/MPCX data, but it is not used to decide whether the target is SiTCP or SiTCP-XG. This separation avoids generation decisions based on stale or alternate-layout EEPROM contents.
 
 Hardware/file pairs verified on 2026-09-19:
 
