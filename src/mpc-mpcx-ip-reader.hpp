@@ -90,18 +90,18 @@ try {
 auto identifier = rr(c, XG_IDENTIFIER, 4);
 const std::vector<uint8_t> expected = {0x58, 0x54, 0x43, 0x50};
 if (identifier == expected) {
-why = "SiTCPXG identifier: 0x58544350";
+why = "SiTCP-XG identifier: 0x58544350";
 return 1;
 }
-why = "SiTCPXG identifier mismatch";
+why = "SiTCP-XG identifier mismatch";
 return 2;
 }
 catch(const BusError&) {
-why = "SiTCPXG identifier register: not supported";
+why = "SiTCP-XG identifier register: not supported";
 return 2;
 }
 catch(const Timeout&) {
-why = "SiTCPXG identifier register: timeout";
+why = "SiTCP-XG identifier register: timeout";
 return -1;
 }
 }
