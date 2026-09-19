@@ -67,6 +67,59 @@ void field(const std::string& name, const std::string& value) {
               << name << ": " << value << '\n';
 }
 
+uint16_t be16(const std::vector<uint8_t>& data, size_t offset) {
+    return static_cast<uint16_t>(
+        (static_cast<uint16_t>(data[offset]) << 8) |
+        static_cast<uint16_t>(data[offset + 1]));
+}
+
+std::string format_mac(const std::vector<uint8_t>& data, size_t offset) {
+    return hex_bytes(data, offset, offset + 6, ':');
+}
+
+std::string format_ipv4(const std::vector<uint8_t>& data, size_t offset) {
+    return std::to_string(data[offset]) + "." +
+           std::to_string(data[offset + 1]) + "." +
+           std::to_string(data[offset + 2]) + "." +
+           std::to_string(data[offset + 3]);
+}
+
+void show_xg_parameters(const std::vector<uint8_t>& eeprom) {
+    const uint16_t disconnect_timeout = be16(eeprom, 0x2A);
+    const double disconnect_seconds =
+        (static_cast<double>(disconnect_timeout) + 1.0) * 0.256;
+    const uint16_t msl = be16(eeprom, 0x2C);
+
+    std::ostringstream disconnect;
+    disconnect << disconnect_timeout << " ("
+               << std::fixed << std::setprecision(3)
+               << disconnect_seconds << " s)";
+
+    std::ostringstream msl_value;
+    msl_value << msl << " ("
+              << std::fixed << std::setprecision(1)
+              << static_cast<double>(msl) * 0.5 << " ms)";
+
+    field("TCP port", std::to_string(be16(eeprom, 0x1C)));
+    field("TCP MSS", std::to_string(be16(eeprom, 0x20)) + " bytes");
+    field("RBCP UDP port", std::to_string(be16(eeprom, 0x22)));
+    field("keepalive nonempty",
+          std::to_string(be16(eeprom, 0x24)) + " ms");
+    field("keepalive empty",
+          std::to_string(be16(eeprom, 0x26)) + " ms");
+    field("connect timeout",
+          std::to_string(be16(eeprom, 0x28)) + " ms");
+    field("disconnect timeout", disconnect.str());
+    field("TCP MSL", msl_value.str());
+    field("retransmission time",
+          std::to_string(be16(eeprom, 0x2E)) + " ms");
+    field("server MAC", format_mac(eeprom, 0x32));
+    field("server IP", format_ipv4(eeprom, 0x38));
+    field("server TCP port", std::to_string(be16(eeprom, 0x3C)));
+    field("transmission rate",
+          std::to_string(be16(eeprom, 0x40)) + " Mbps");
+}
+
 std::string type_name(int type) {
     if (type == 1) {
         return "MPCX (SiTCP-XG)";
@@ -172,6 +225,11 @@ int run_mpc_mpcx_reader(int argc, char** argv) {
               std::to_string(eeprom[0x19]) + "." +
               std::to_string(eeprom[0x1A]) + "." +
               std::to_string(eeprom[0x1B]));
+        if (target_type == 1) {
+            std::cout << "SiTCP-XG EEPROM parameters:\n";
+            show_xg_parameters(eeprom);
+        }
+
         field("status", "READ OK");
 
         std::cout << "raw EEPROM FC00..FC4F:\n";
