@@ -68,23 +68,6 @@ throw Error("short read");
 o.insert(o.end(), b.begin(), b.end());
 }
 return o;}
-bool tag(std::vector<uint8_t>b){
-if(b.size()!=7)return false;
-for(auto x:b){
-if (x == 0 || x == ' ' || x == '-' || (x >= '0' && x <= '9')) {
-continue;
-}
-x &= 0xdf;
-if(x<'A'||x>'Z')return false;}
-return true;}
-int cls(const std::vector<uint8_t>&d){
-if(d.size()!=22)return 0;
-std::vector<uint8_t>a,b;
-for(int i=6;i<13;i++)a.push_back(d[i]?d[i]-0x34:0);
-for(int i=0;i<7;i++)b.push_back(d[i]?d[i]-0x2c:0);
-if(tag(a))return 2;
-if(tag(b))return 1;
-return 0;}
 std::vector<uint8_t>xgp(const std::vector<uint8_t>&e){
 std::vector<uint8_t>p(e.begin(),e.begin()+16);p.insert(p.end(),e.begin()+18,e.begin()+24);
 return p;} std::vector<uint8_t>np(const std::vector<uint8_t>&e){
