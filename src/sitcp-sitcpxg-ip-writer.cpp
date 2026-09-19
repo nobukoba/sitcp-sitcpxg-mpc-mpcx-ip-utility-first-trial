@@ -1,4 +1,4 @@
-#include "ip-config.hpp"
+#include "sitcp-sitcpxg-network-config.hpp"
 
 #include <iostream>
 #include <string>
@@ -11,8 +11,8 @@ void usage(const char* program) {
         << "Options:\n"
         << "  --eeprom      Write EEPROM IP (default)\n"
         << "  --current     Write current/runtime IP, reconnect to NEW_IP, and verify\n"
-        << "  --port N      RBCP UDP port (default: " << ipconfig::DEFAULT_PORT << ")\n"
-        << "  --timeout SEC RBCP timeout in seconds (default: " << ipconfig::DEFAULT_TIMEOUT << ")\n"
+        << "  --port N      RBCP UDP port (default: " << sitcp_sitcpxg::network_config::DEFAULT_PORT << ")\n"
+        << "  --timeout SEC RBCP timeout in seconds (default: " << sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT << ")\n"
         << "  -h, --help    Show this help\n";
 }
 
@@ -29,8 +29,8 @@ int main(int argc, char** argv) {
 
         const std::string host = argv[1];
         const std::string new_ip = argv[2];
-        uint16_t port = ipconfig::DEFAULT_PORT;
-        double timeout = ipconfig::DEFAULT_TIMEOUT;
+        uint16_t port = sitcp_sitcpxg::network_config::DEFAULT_PORT;
+        double timeout = sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT;
         bool write_current = false;
         bool mode_explicit = false;
 
@@ -38,49 +38,49 @@ int main(int argc, char** argv) {
             const std::string arg = argv[i];
             if (arg == "--eeprom") {
                 if (mode_explicit && write_current) {
-                    throw ipconfig::Error("--eeprom and --current are mutually exclusive");
+                    throw sitcp_sitcpxg::network_config::Error("--eeprom and --current are mutually exclusive");
                 }
                 write_current = false;
                 mode_explicit = true;
             } else if (arg == "--current") {
                 if (mode_explicit && !write_current) {
-                    throw ipconfig::Error("--eeprom and --current are mutually exclusive");
+                    throw sitcp_sitcpxg::network_config::Error("--eeprom and --current are mutually exclusive");
                 }
                 write_current = true;
                 mode_explicit = true;
             } else if (arg == "--port" && i + 1 < argc) {
                 const auto value = std::stoul(argv[++i]);
                 if (value == 0 || value > 65535) {
-                    throw ipconfig::Error("invalid port");
+                    throw sitcp_sitcpxg::network_config::Error("invalid port");
                 }
                 port = static_cast<uint16_t>(value);
             } else if (arg == "--timeout" && i + 1 < argc) {
                 timeout = std::stod(argv[++i]);
                 if (timeout <= 0) {
-                    throw ipconfig::Error("timeout must be positive");
+                    throw sitcp_sitcpxg::network_config::Error("timeout must be positive");
                 }
             } else if (arg == "-h" || arg == "--help") {
                 usage(argv[0]);
                 return 0;
             } else {
-                throw ipconfig::Error("unknown option: " + arg);
+                throw sitcp_sitcpxg::network_config::Error("unknown option: " + arg);
             }
         }
 
         std::cout << "before:\n";
-        ipconfig::show_all(host, port, timeout);
+        sitcp_sitcpxg::network_config::show_all(host, port, timeout);
 
         if (write_current) {
-            ipconfig::write_current_ip(host, new_ip, port, timeout);
+            sitcp_sitcpxg::network_config::write_current_ip(host, new_ip, port, timeout);
             std::cout << "after (reconnected to " << new_ip << "):\n";
-            ipconfig::show_all(new_ip, port, timeout);
+            sitcp_sitcpxg::network_config::show_all(new_ip, port, timeout);
             std::cout
                 << "written target : current/runtime IP only\n"
                 << "status         : WRITE/RECONNECT/VERIFY OK\n";
         } else {
-            ipconfig::write_eeprom_ip(host, new_ip, port, timeout);
+            sitcp_sitcpxg::network_config::write_eeprom_ip(host, new_ip, port, timeout);
             std::cout << "after:\n";
-            ipconfig::show_all(host, port, timeout);
+            sitcp_sitcpxg::network_config::show_all(host, port, timeout);
             std::cout
                 << "written target : EEPROM IP only\n"
                 << "status         : WRITE/VERIFY OK\n";
