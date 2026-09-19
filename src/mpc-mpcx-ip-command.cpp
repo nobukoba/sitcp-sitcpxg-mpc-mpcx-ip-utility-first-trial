@@ -7,6 +7,7 @@ void unified_usage(const char* p) {
     std::cerr << "Usage: " << p << " COMMAND ...\n\n"
               << "Commands:\n"
               << "  inspect MPC_OR_MPCX_FILE\n"
+              << "  mac MPC_OR_MPCX_FILE\n"
               << "  read IP [--port N] [--timeout SEC]\n"
               << "  verify IP FILE [--port N] [--timeout SEC]\n"
               << "  mpcx-plan IP FILE [--port N] [--timeout SEC]\n"
@@ -66,10 +67,24 @@ int main(int argc, char** argv) {
             uint16_t port = sitcp_sitcpxg::network_config::DEFAULT_PORT;
             double timeout = sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT;
             bool current = false;
+            bool mode_explicit = false;
             for (int i = 4; i < argc; ++i) {
                 const std::string a = argv[i];
-                if (a == "--current") current = true;
-                else if (a == "--eeprom") current = false;
+                if (a == "--current") {
+                    if (mode_explicit && !current) {
+                        throw std::runtime_error(
+                            "--eeprom and --current are mutually exclusive");
+                    }
+                    current = true;
+                    mode_explicit = true;
+                } else if (a == "--eeprom") {
+                    if (mode_explicit && current) {
+                        throw std::runtime_error(
+                            "--eeprom and --current are mutually exclusive");
+                    }
+                    current = false;
+                    mode_explicit = true;
+                }
                 else if (a == "--port" && i + 1 < argc) {
                     const auto p = std::stoul(argv[++i]);
                     if (p == 0 || p > 65535) throw std::runtime_error("invalid port");
