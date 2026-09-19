@@ -39,7 +39,7 @@ std::vector<uint8_t> read_exact(RbcpClient& client, uint32_t address,
 }
 
 std::string hex_bytes(const std::vector<uint8_t>& data,
-                      size_t begin = 0, size_t end = SIZE_MAX,
+                      size_t begin = 0, size_t end = static_cast<size_t>(-1),
                       char separator = ' ') {
     end = std::min(end, data.size());
 
