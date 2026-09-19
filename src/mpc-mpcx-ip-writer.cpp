@@ -1,8 +1,6 @@
 #include "ip-config.hpp"
 
-#define main mpc_mpcx_writer_legacy_main
-#include "mpc-mpcx-writer.cpp"
-#undef main
+#include "mpc-mpcx-writer.hpp"
 
 namespace {
 
@@ -94,7 +92,7 @@ int main(int argc, char** argv) {
             writer_argv.push_back(&(*it)[0]);
         }
 
-        const int writer_result = mpc_mpcx_writer_legacy_main(
+        const int writer_result = run_mpc_mpcx_writer(
             static_cast<int>(writer_argv.size()), &writer_argv[0]);
         if (writer_result != 0) {
             return writer_result;
