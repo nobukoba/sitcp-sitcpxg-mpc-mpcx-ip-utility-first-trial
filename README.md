@@ -12,8 +12,6 @@ The installed command set contains five commands:
 - `sitcp-sitcpxg-ip-writer` — IP-only writer for SiTCP / SiTCP-XG.
 - `sitcp-sitcpxg-ip-reader` — IP-only reader for SiTCP / SiTCP-XG.
 
-The former `mpc-mpcx-writer`, `mpc-mpcx-reader`, and `mpc-mpcx-command` implementations remain in `src/` as internal implementation units, but they are no longer installed as public commands.
-
 ## Quick start
 
 ```bash
@@ -58,7 +56,7 @@ EEPROM IP
 
 and then reads/decodes the MPC/MPCX EEPROM information.
 
-The reader determines the device generation first from the documented SiTCPXG Identifier register at `0xFFFFFF08..0xFFFFFF0B`. An exact value of `0x58544350` identifies SiTCP-XG. MPC/MPCX payload classification is handled separately and is not used to determine the device generation.
+The reader determines the device generation first from the documented SiTCP-XG Identifier register at `0xFFFFFF08..0xFFFFFF0B`. An exact value of `0x58544350` identifies SiTCP-XG. MPC/MPCX payload classification is handled separately and is not used to determine the device generation.
 
 ## Writer
 
@@ -159,7 +157,7 @@ Source files should use conventional readable C++ formatting. Avoid compressed o
 
 ## Implementation notes
 
-The public commands use shared IP configuration code in `src/ip-config.hpp`. MPC/MPCX payload handling and IP register handling remain logically separated internally even though some commands expose both functions.
+The public commands use shared transport/network/MPC-MPCX code in `src/sitcp-sitcpxg-rbcp.hpp`, `src/sitcp-sitcpxg-network-config.hpp`, and `src/sitcp-sitcpxg-mpc-mpcx.hpp`. MPC/MPCX payload handling and IP register handling remain logically separated internally even though some commands expose both functions.
 
 IP/MAC register addresses used by the implementation are:
 
@@ -179,4 +177,4 @@ This is an experimental implementation and is not an official Bee Beans Technolo
 - [For developers](FOR_DEVELOPERS.md) — architecture, build/development notes, technical evidence, MPC/MPCX EEPROM mappings, device-generation detection, references, and testing.
 - [Agent instructions](AGENTS.md) — constraints for automated development.
 
-The developer guide includes the relevant Bee Beans Technologies documentation references, including the SiTCPXG manual and MPC Writer XG guide.
+The developer guide includes the relevant Bee Beans Technologies documentation references, including the SiTCP-XG manual and MPC Writer XG guide.
