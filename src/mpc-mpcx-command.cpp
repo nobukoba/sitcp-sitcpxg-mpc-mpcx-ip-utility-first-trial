@@ -219,35 +219,35 @@ int main(int argc, char** argv) {
             const std::string ip = argv[2]; const uint32_t addr = parse_u32(argv[3]); size_t len = 1; int opt = 4;
             if (opt < argc && std::string(argv[opt]).rfind("--",0) != 0) { len = std::stoul(argv[opt++], nullptr, 0); }
             std::vector<std::string> tmp = {argv[0], ip}; for (int i=opt;i<argc;++i) tmp.emplace_back(argv[i]);
-            std::vector<char*> av; for (auto& s:tmp) av.push_back(s.data()); auto a = parse_target((int)av.size(), av.data(), 1);
+            std::vector<char*> av; for (auto& s:tmp) av.push_back(&s[0]); auto a = parse_target((int)av.size(), av.data(), 1);
             auto d = RbcpClient(a.ip,a.port,a.timeout).read(addr,len); field("command","probe"); field("target",a.ip+":"+std::to_string(a.port)); field("address",hex_address(addr)); field("data",hex_bytes(d)); field("status","RBCP REACHABLE"); return 0;
         }
 
         if (cmd == "rbcp-read") {
             if (argc < 5) throw Error("usage: rbcp-read IP ADDRESS LENGTH");
             const std::string ip=argv[2]; uint32_t addr=parse_u32(argv[3]); size_t len=std::stoul(argv[4],nullptr,0);
-            std::vector<std::string> tmp={argv[0],ip}; for(int i=5;i<argc;++i)tmp.emplace_back(argv[i]); std::vector<char*> av;for(auto&s:tmp)av.push_back(s.data());auto a=parse_target((int)av.size(),av.data(),1);
+            std::vector<std::string> tmp={argv[0],ip}; for(int i=5;i<argc;++i)tmp.emplace_back(argv[i]); std::vector<char*> av;for(auto&s:tmp)av.push_back(&s[0]);auto a=parse_target((int)av.size(),av.data(),1);
             auto d=RbcpClient(a.ip,a.port,a.timeout).read(addr,len);field("command","rbcp-read");field("address",hex_address(addr));field("data",hex_bytes(d));return 0;
         }
 
         if (cmd == "rbcp-write") {
             if (argc < 5) throw Error("usage: rbcp-write IP ADDRESS HEX-BYTES");
             const std::string ip=argv[2];uint32_t addr=parse_u32(argv[3]);auto bytes=parse_hex(argv[4]);
-            std::vector<std::string> tmp={argv[0],ip};for(int i=5;i<argc;++i)tmp.emplace_back(argv[i]);std::vector<char*> av;for(auto&s:tmp)av.push_back(s.data());auto a=parse_target((int)av.size(),av.data(),1);
+            std::vector<std::string> tmp={argv[0],ip};for(int i=5;i<argc;++i)tmp.emplace_back(argv[i]);std::vector<char*> av;for(auto&s:tmp)av.push_back(&s[0]);auto a=parse_target((int)av.size(),av.data(),1);
             auto ack=RbcpClient(a.ip,a.port,a.timeout).write(addr,bytes);(void)ack;field("command","rbcp-write");field("address",hex_address(addr));field("data",hex_bytes(bytes));field("status","WRITE OK");return 0;
         }
 
         if (cmd == "verify" || cmd == "mpcx-plan") {
             if (argc < 4) throw Error("missing IP or FILE");
             const std::string ip=argv[2], file=argv[3];auto payload=read_file(file);int t=classify(payload);if(!t)throw Error("invalid/unknown 22-byte MPC payload");
-            std::vector<std::string> tmp={argv[0],ip};for(int i=4;i<argc;++i)tmp.emplace_back(argv[i]);std::vector<char*> av;for(auto&s:tmp)av.push_back(s.data());auto a=parse_target((int)av.size(),av.data(),1);RbcpClient c(a.ip,a.port,a.timeout);auto e=read_exact(c,EEPROM_BASE,0x50);
+            std::vector<std::string> tmp={argv[0],ip};for(int i=4;i<argc;++i)tmp.emplace_back(argv[i]);std::vector<char*> av;for(auto&s:tmp)av.push_back(&s[0]);auto a=parse_target((int)av.size(),av.data(),1);RbcpClient c(a.ip,a.port,a.timeout);auto e=read_exact(c,EEPROM_BASE,0x50);
             if(cmd=="mpcx-plan"){if(t!=1)throw Error("payload is not classified as SiTCP-XG");std::vector<uint8_t> expected(e.begin(),e.begin()+24);std::copy(payload.begin(),payload.begin()+16,expected.begin());std::copy(payload.begin()+16,payload.end(),expected.begin()+18);field("command","mpcx-plan");field("preserved FC10..FC11",hex_bytes({e[16],e[17]}));field("EEPROM record",hex_bytes(expected));field("status","NO WRITE PERFORMED");return 0;}
             bool ok=false;if(t==1){std::vector<uint8_t> expected(e.begin(),e.begin()+24);std::copy(payload.begin(),payload.begin()+16,expected.begin());std::copy(payload.begin()+16,payload.end(),expected.begin()+18);ok=std::equal(expected.begin(),expected.end(),e.begin());}else{ok=std::equal(payload.begin(),payload.begin()+6,e.begin()+0x12)&&std::equal(payload.begin()+6,payload.end(),e.begin()+0x40);}field("command","verify");field("file type",type_name(t));field("match",ok?"YES":"NO");field("status",ok?"VERIFY OK":"VERIFY FAILED");return ok?0:6;
         }
 
         if (cmd == "clear") {
             if (argc < 4 || std::string(argv[3]) != "--yes-really-clear") throw Error("clear is destructive; add --yes-really-clear immediately after IP");
-            const std::string ip=argv[2];std::vector<std::string> tmp={argv[0],ip};for(int i=4;i<argc;++i)tmp.emplace_back(argv[i]);std::vector<char*> av;for(auto&s:tmp)av.push_back(s.data());auto a=parse_target((int)av.size(),av.data(),1);RbcpClient c(a.ip,a.port,a.timeout);
+            const std::string ip=argv[2];std::vector<std::string> tmp={argv[0],ip};for(int i=4;i<argc;++i)tmp.emplace_back(argv[i]);std::vector<char*> av;for(auto&s:tmp)av.push_back(&s[0]);auto a=parse_target((int)av.size(),av.data(),1);RbcpClient c(a.ip,a.port,a.timeout);
             c.write(EEPROM_WRITE_ENABLE,{0x00});try{std::vector<uint8_t> ff(16,0xff);for(uint32_t off=0;off<0x80;off+=16)c.write(EEPROM_BASE+off,ff);}catch(...){try{c.write(EEPROM_WRITE_ENABLE,{0xff});}catch(...){}throw;}c.write(EEPROM_WRITE_ENABLE,{0xff});field("command","clear");field("EEPROM area","0xFFFFFC00..0xFFFFFC7F");field("status","CLEAR OK");return 0;
         }
 
