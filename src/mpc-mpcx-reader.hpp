@@ -160,8 +160,9 @@ std::string why;
 int t=detect(c,e,why);
 auto p=t==1?xgp(e):t==2?np(e):std::vector<uint8_t>{};field("command","read");field("target",ip+":"+std::to_string(port));field("detected type",tn(t));field("detection",why);
 if(!p.empty())field("reconstructed payload",hex(p));
-if(t==1){field("MPCX FC00..FC0F",hex(e,0,16));field("MAC",hex(e,0x12,0x18,':'));}
-else if(t==2){field("MAC",hex(e,0x12,0x18,':'));field("MPC FC40..FC4F",hex(e,0x40,0x50));}
+field("MAC",hex(e,0x12,0x18,':'));
+if(t==1){field("MPCX FC00..FC0F",hex(e,0,16));}
+else if(t==2){field("MPC FC40..FC4F",hex(e,0x40,0x50));}
 field("EEPROM IP",std::to_string(e[0x18])+"."+std::to_string(e[0x19])+"."+std::to_string(e[0x1a])+"."+std::to_string(e[0x1b]));field("status","READ OK");
 std::cout << "raw EEPROM FC00..FC4F:\n";
 for(size_t o=0;o<e.size();o+=16)std::cout<<std::hex<<std::uppercase<<std::setw(8)<<std::setfill('0')<<(EEPROM_BASE+o)<<": "<<hex(e,o,std::min(o+16,e.size()))<<'\n';
