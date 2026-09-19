@@ -2,19 +2,13 @@
 
 #include "sitcp-sitcpxg-rbcp.hpp"
 #include <algorithm>
-#include <cerrno>
 #include <cstdint>
-#include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <netdb.h>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <sys/select.h>
-#include <sys/socket.h>
-#include <unistd.h>
 #include <vector>
 
 namespace {
@@ -40,7 +34,7 @@ std::vector<uint8_t> read_exact(RbcpClient& c, uint32_t addr, size_t len) {
 }
 
 bool valid_tag(std::vector<uint8_t> b) {
-    if (b.size() != 7) return false;
+    if (b.size() != 7) {\n        return false;\n    }
     for (auto x : b) {
         if (x == 0 || x == ' ' || x == '-' || (x >= '0' && x <= '9')) continue;
         x &= 0xdf;
@@ -50,7 +44,7 @@ bool valid_tag(std::vector<uint8_t> b) {
 }
 
 int classify(const std::vector<uint8_t>& d) {
-    if (d.size() != 22) return 0;
+    if (d.size() != 22) {\n        return 0;\n    }
     std::vector<uint8_t> a, b;
     for (size_t i = 6; i < 13; ++i) a.push_back(d[i] ? static_cast<uint8_t>(d[i] - 0x34) : 0);
     for (size_t i = 0; i < 7; ++i) b.push_back(d[i] ? static_cast<uint8_t>(d[i] - 0x2c) : 0);
@@ -123,7 +117,7 @@ void usage(const char* p) {
               << "  rbcp-read IP ADDRESS LENGTH [--port N] [--timeout SEC]\n"
               << "  rbcp-write IP ADDRESS HEX-BYTES [--port N] [--timeout SEC]\n"
               << "  clear IP --yes-really-clear [--port N] [--timeout SEC]\n"
-              << "  write IP FILE [--port N] [--timeout SEC]  (use mpc-mpcx-writer)\n\n"
+              << "  write IP FILE [--port N] [--timeout SEC]  (use mpc-mpcx-ip-writer)\n\n"
               << "Defaults:\n"
               << "  --port N       RBCP UDP port (default: " << DEFAULT_PORT << ")\n"
               << "  --timeout SEC  RBCP timeout in seconds (default: " << DEFAULT_TIMEOUT << ")\n"
@@ -199,7 +193,7 @@ inline int run_mpc_mpcx_command(int argc, char** argv) {
         }
 
         if (cmd == "write") {
-            std::cerr << "Use mpc-mpcx-writer for the verified high-level write path.\n";
+            std::cerr << "Use mpc-mpcx-ip-writer for the verified high-level write path.\n";
             return 8;
         }
 
