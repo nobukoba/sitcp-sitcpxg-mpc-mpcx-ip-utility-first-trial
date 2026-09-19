@@ -1,6 +1,6 @@
 #include "ip-config.hpp"
 
-#include "mpc-mpcx-writer.hpp"
+#include "mpc-mpcx-ip-writer.hpp"
 
 namespace {
 
