@@ -1,4 +1,5 @@
 #include "sitcp-sitcpxg-network-config.hpp"
+#include "sitcp-sitcpxg-rbcp.hpp"
 
 #include <arpa/inet.h>
 #include <algorithm>
@@ -27,134 +28,18 @@ constexpr size_t EEPROM_READ_SIZE = 0x50;
 constexpr size_t MPC_FILE_SIZE = 22;
 constexpr int FIELD_WIDTH = 20;
 
-struct RbcpError : std::runtime_error { using std::runtime_error::runtime_error; };
-struct RbcpTimeout : RbcpError { using RbcpError::RbcpError; };
-struct RbcpBusError : RbcpError { using RbcpError::RbcpError; };
-
-std::string hex_bytes(const std::vector<uint8_t>& data, size_t begin = 0,
-                      size_t end = SIZE_MAX, char sep = ' ') {
-    end = std::min(end, data.size());
-    std::ostringstream os;
-    os << std::hex << std::setfill('0');
-    for (size_t i = begin; i < end; ++i) {
-        if (i > begin) os << sep;
-        os << std::setw(2) << static_cast<unsigned>(data[i]);
-    }
-    return os.str();
-}
-
-void field(const std::string& key, const std::string& value) {
-    std::cout << std::left << std::setw(FIELD_WIDTH) << key << ": " << value << "\n";
-}
-
-class RbcpClient {
-public:
-    RbcpClient(std::string host, uint16_t port, double timeout)
-        : host_(std::move(host)), port_(port), timeout_(timeout) {}
-
-    std::vector<uint8_t> read(uint32_t address, size_t length) {
-        if (length > 255) throw RbcpError("one RBCP read is limited to 255 bytes");
-        const uint8_t id = next_id();
-        auto packet = header(0xC0, address, static_cast<uint8_t>(length), id);
-        return transaction(packet, id);
-    }
-
-    std::vector<uint8_t> write(uint32_t address, const std::vector<uint8_t>& data) {
-        if (data.size() > 255) throw RbcpError("one RBCP write is limited to 255 bytes");
-        const uint8_t id = next_id();
-        auto packet = header(0x80, address, static_cast<uint8_t>(data.size()), id);
-        packet.insert(packet.end(), data.begin(), data.end());
-        return transaction(packet, id);
-    }
-
-private:
-    uint8_t next_id() {
-        const uint8_t v = packet_id_;
-        packet_id_ = static_cast<uint8_t>(packet_id_ + 1);
-        return v;
-    }
-
-    static std::vector<uint8_t> header(uint8_t cmd, uint32_t addr, uint8_t len, uint8_t id) {
-        return {0xFF, cmd, id, len,
-                static_cast<uint8_t>((addr >> 24) & 0xFF),
-                static_cast<uint8_t>((addr >> 16) & 0xFF),
-                static_cast<uint8_t>((addr >> 8) & 0xFF),
-                static_cast<uint8_t>(addr & 0xFF)};
-    }
-
-    std::vector<uint8_t> transaction(const std::vector<uint8_t>& packet, uint8_t id) {
-        addrinfo hints{};
-        hints.ai_family = AF_INET;
-        hints.ai_socktype = SOCK_DGRAM;
-        addrinfo* res = nullptr;
-        const std::string portstr = std::to_string(port_);
-        const int gai = getaddrinfo(host_.c_str(), portstr.c_str(), &hints, &res);
-        if (gai != 0) throw RbcpError(std::string("getaddrinfo: ") + gai_strerror(gai));
-
-        const int fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-        if (fd < 0) {
-            freeaddrinfo(res);
-            throw RbcpError(std::string("socket: ") + std::strerror(errno));
-        }
-
-        const ssize_t sent = sendto(fd, packet.data(), packet.size(), 0, res->ai_addr, res->ai_addrlen);
-        freeaddrinfo(res);
-        if (sent != static_cast<ssize_t>(packet.size())) {
-            close(fd);
-            throw RbcpError(std::string("sendto: ") + std::strerror(errno));
-        }
-
-        fd_set rfds;
-        FD_ZERO(&rfds);
-        FD_SET(fd, &rfds);
-        timeval tv{};
-        tv.tv_sec = static_cast<long>(timeout_);
-        tv.tv_usec = static_cast<long>((timeout_ - tv.tv_sec) * 1000000.0);
-        const int rv = select(fd + 1, &rfds, nullptr, nullptr, &tv);
-        if (rv == 0) {
-            close(fd);
-            throw RbcpTimeout("RBCP timeout from " + host_ + ":" + std::to_string(port_));
-        }
-        if (rv < 0) {
-            close(fd);
-            throw RbcpError(std::string("select: ") + std::strerror(errno));
-        }
-
-        uint8_t buf[263];
-        const ssize_t n = recvfrom(fd, buf, sizeof(buf), 0, nullptr, nullptr);
-        close(fd);
-        if (n < 0) throw RbcpError(std::string("recvfrom: ") + std::strerror(errno));
-        if (n < 8) throw RbcpError("short RBCP reply: " + std::to_string(n) + " bytes");
-        if (buf[0] != 0xFF) throw RbcpError("unexpected RBCP version/type");
-        if (buf[2] != id) throw RbcpError("packet ID mismatch");
-        if (buf[1] & 0x01) throw RbcpBusError("RBCP bus error returned by target");
-        return std::vector<uint8_t>(buf + 8, buf + n);
-    }
-
-    std::string host_;
-    uint16_t port_;
-    double timeout_;
-    uint8_t packet_id_ = 0;
-};
-
-std::vector<uint8_t> read_retry(RbcpClient& c, uint32_t addr, size_t len, int attempts = 3) {
-    for (int i = 0; i < attempts; ++i) {
-        try {
-            return c.read(addr, len);
-        } catch (const RbcpTimeout&) {
-            if (i + 1 == attempts) throw;
-        }
-    }
-    throw RbcpTimeout("RBCP timeout");
-}
+namespace rbcp = sitcp_sitcpxg::rbcp;
+using RbcpClient = rbcp::Client;
+using RbcpError = rbcp::Error;
+using RbcpTimeout = rbcp::Timeout;
+using RbcpBusError = rbcp::BusError;
 
 std::vector<uint8_t> read_exact(RbcpClient& c, uint32_t addr, size_t len, size_t chunk = 8) {
     std::vector<uint8_t> out;
     for (size_t off = 0; off < len; off += chunk) {
         const size_t n = std::min(chunk, len - off);
-        auto b = read_retry(c, addr + static_cast<uint32_t>(off), n);
-        if (b.size() != n) throw RbcpError("short EEPROM read");
-        out.insert(out.end(), b.begin(), b.end());
+        auto block = rbcp::read_retry(c, addr + static_cast<uint32_t>(off), n);
+        out.insert(out.end(), block.begin(), block.end());
     }
     return out;
 }
@@ -206,7 +91,7 @@ std::string type_name(int t) {
 
 int detect_target(RbcpClient& c, std::string& why) {
     try {
-        const auto identifier = read_retry(c, XG_IDENTIFIER, 4);
+        const auto identifier = rbcp::read_retry(c, XG_IDENTIFIER, 4);
         const std::vector<uint8_t> expected = {0x58, 0x54, 0x43, 0x50};
         if (identifier == expected) {
             why = "SiTCP-XG identifier: 0x58544350";
