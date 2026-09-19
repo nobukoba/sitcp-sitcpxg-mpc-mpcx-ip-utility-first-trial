@@ -102,31 +102,26 @@ return o.str();} void field(std::string k,std::string v){
 std::cout<<std::left<<std::setw(FW)<<k<<": "<<v<<'\n';}
 std::string tn(int t){
 return t==1?"MPCX (SiTCP-XG)":t==2?"MPC (normal SiTCP)":t==-1?"ambiguous":"unknown";}
-int detect(Client&c,const std::vector<uint8_t>&e,std::string&w){
-bool x=cls(xgp(e))==1,n=cls(np(e))==2;
-if(x&&!n){w="EEPROM payload";
-return 1;}
-if(n&&!x){w="EEPROM payload";
-return 2;}
-if(!x&&!n){w="EEPROM payload not classified";
-return 0;}
+int detect(Client& c, std::string& why) {
 try {
 auto identifier = rr(c, XG_IDENTIFIER, 4);
 const std::vector<uint8_t> expected = {0x58, 0x54, 0x43, 0x50};
 if (identifier == expected) {
-w = "SiTCPXG identifier: 0x58544350";
+why = "SiTCPXG identifier: 0x58544350";
 return 1;
 }
-w = "SiTCPXG identifier mismatch";
-return n ? 2 : 0;
+why = "SiTCPXG identifier mismatch";
+return 2;
 }
-catch(const BusError&){
-w="SiTCPXG identifier register: not supported";
-return n ? 2 : 0;
+catch(const BusError&) {
+why = "SiTCPXG identifier register: not supported";
+return 2;
 }
-catch(const Timeout&){
-w="SiTCPXG identifier register: timeout";
-return -1;}}
+catch(const Timeout&) {
+why = "SiTCPXG identifier register: timeout";
+return -1;
+}
+}
 void usage(const char*a){
 std::cerr << "Usage: " << a << " <ip> [options]\n\n"
           << "Options:\n"
@@ -157,7 +152,7 @@ else throw Error("unknown option: "+a);}
 Client c(ip,port,timeout);
 auto e=exact(c,EEPROM_BASE,0x50);
 std::string why;
-int t=detect(c,e,why);
+int t=detect(c,why);
 auto p=t==1?xgp(e):t==2?np(e):std::vector<uint8_t>{};field("command","read");field("target",ip+":"+std::to_string(port));field("detected type",tn(t));field("detection",why);
 if(!p.empty())field("reconstructed payload",hex(p));
 field("MAC",hex(e,0x12,0x18,':'));
