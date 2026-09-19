@@ -16,7 +16,7 @@ all: $(TARGETS)
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
-$(BIN_DIR)/%: $(SRC_DIR)/%.cpp | $(BIN_DIR)
+HEADERS := $(wildcard $(SRC_DIR)/*.hpp)\n\n$(BIN_DIR)/%: $(SRC_DIR)/%.cpp $(HEADERS) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $< -o $@
 
 install: all
