@@ -1,26 +1,19 @@
 #include "sitcp-sitcpxg-network-config.hpp"
 #include "sitcp-sitcpxg-rbcp.hpp"
 
-#include <arpa/inet.h>
 #include <algorithm>
-#include <cerrno>
 #include <cstdint>
-#include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <netdb.h>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <sys/select.h>
-#include <sys/socket.h>
-#include <unistd.h>
 #include <vector>
 
 namespace {
-constexpr double DEFAULT_TIMEOUT = 3.0;
-constexpr uint16_t DEFAULT_PORT = 4660;
+constexpr double DEFAULT_TIMEOUT = rbcp::DEFAULT_TIMEOUT;
+constexpr uint16_t DEFAULT_PORT = rbcp::DEFAULT_PORT;
 constexpr uint32_t EEPROM_BASE = 0xFFFFFC00u;
 constexpr uint32_t EEPROM_WRITE_ENABLE = 0xFFFFFCFFu;
 constexpr uint32_t XG_IDENTIFIER = 0xFFFFFF08u;
