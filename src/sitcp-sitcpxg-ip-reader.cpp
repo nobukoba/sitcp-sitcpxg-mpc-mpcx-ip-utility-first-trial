@@ -9,8 +9,8 @@ void usage(const char* program) {
     std::cerr
         << "Usage: " << program << " IP [options]\n\n"
         << "Options:\n"
-        << "  --port N       RBCP UDP port (default: " << sitcp_sitcpxg::network_config::DEFAULT_PORT << ")\n"
-        << "  --timeout SEC  RBCP timeout in seconds (default: " << sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT << ")\n"
+        << "  --port N       RBCP UDP port (default: "\n        << sitcp_sitcpxg::network_config::DEFAULT_PORT << ")\n"
+        << "  --timeout SEC  RBCP timeout in seconds (default: "\n        << sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT << ")\n"
         << "  -h, --help     Show this help\n";
 }
 
@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
                 usage(argv[0]);
                 return 0;
             } else {
-                throw sitcp_sitcpxg::network_config::Error("unknown option: " + arg);
+                throw sitcp_sitcpxg::network_config::Error(\n                    "unknown option: " + arg);
             }
         }
 
