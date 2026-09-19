@@ -15,6 +15,9 @@ For each domain, keep three evidence classes distinct:
 
 ## Public references
 
+For generation detection, the authoritative public reference is the Bee Beans Technologies SiTCPXG manual, section 4.2.3. It defines the read-only SiTCPXG Identifier register as `0x58544350`. The current implementation reads that identifier at `0xFFFFFF08..0xFFFFFF0B` when EEPROM payload reconstruction is ambiguous. The former experimental `0xFFFFFF50` probe must not be used as a generation identifier.
+
+
 - Bee Beans Technologies SiTCP downloads: https://www.bbtech.co.jp/download-files/sitcp/index_en.html
 - SiTCP MPC Writer XG guide: https://www.bbtech.co.jp/download-files/sitcp/SiTCP-MPC-Writer-XG-en.0.1.1.pdf
 - Bee Beans Technologies `sitcpy`: https://github.com/BeeBeansTechnologies/sitcpy
