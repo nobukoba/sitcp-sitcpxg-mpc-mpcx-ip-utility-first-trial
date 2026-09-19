@@ -110,8 +110,7 @@ Never commit proprietary MPC/MPCX files, official proprietary executables/librar
 Keep these documents synchronized with implementation changes:
 
 - `README.md`: user-facing quick start and command usage.
-- `FOR_DEVELOPERS.md`: architecture, build/development notes, testing, and implementation status.
-- `TECHNICAL_NOTES.md`: evidence and reconstructed protocol/register behavior.
+- `FOR_DEVELOPERS.md`: architecture, build/development notes, testing, implementation status, technical evidence, and reconstructed protocol/register behavior.
 - `AGENTS.md`: constraints future automated development must preserve.
 
 ## Development priorities
