@@ -20,7 +20,7 @@ namespace {
 constexpr double DEFAULT_TIMEOUT=3.0;
 constexpr uint16_t DEFAULT_PORT=4660;
 constexpr uint32_t EEPROM_BASE=0xFFFFFC00u;
-constexpr uint32_t XG_PROBE=0xFFFFFF50u;
+constexpr uint32_t XG_IDENTIFIER = 0xFFFFFF08u;
 constexpr int FW=20;
 struct Error:std::runtime_error{using std::runtime_error::runtime_error;};
 
@@ -109,11 +109,23 @@ return 1;}
 if(n&&!x){w="EEPROM payload";
 return 2;}
 if(!x&&!n){w="EEPROM payload not classified";
-return 0;}try{rr(c,XG_PROBE,1);w="XG register probe: readable";
-return 1;}
-catch(const BusError&){w="XG register probe: not supported";
-return 2;}
-catch(const Timeout&){w="XG register probe: timeout";
+return 0;}
+try {
+auto identifier = rr(c, XG_IDENTIFIER, 4);
+const std::vector<uint8_t> expected = {0x58, 0x54, 0x43, 0x50};
+if (identifier == expected) {
+w = "SiTCPXG identifier: 0x58544350";
+return 1;
+}
+w = "SiTCPXG identifier mismatch";
+return n ? 2 : 0;
+}
+catch(const BusError&){
+w="SiTCPXG identifier register: not supported";
+return n ? 2 : 0;
+}
+catch(const Timeout&){
+w="SiTCPXG identifier register: timeout";
 return -1;}}
 void usage(const char*a){
 std::cerr << "Usage: " << a << " <ip> [options]\n\n"
