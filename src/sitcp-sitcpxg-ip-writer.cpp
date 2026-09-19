@@ -11,8 +11,8 @@ void usage(const char* program) {
         << "Options:\n"
         << "  --eeprom      Write EEPROM IP (default)\n"
         << "  --current     Write current/runtime IP, reconnect to NEW_IP, and verify\n"
-        << "  --port N      RBCP UDP port (default: "\n        << sitcp_sitcpxg::network_config::DEFAULT_PORT << ")\n"
-        << "  --timeout SEC RBCP timeout in seconds (default: "\n        << sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT << ")\n"
+        << "  --port N      RBCP UDP port (default: "\n        << sitcp_sitcpxg::network_config::DEFAULT_PORT << ")\\n"
+        << "  --timeout SEC RBCP timeout in seconds (default: "\n        << sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT << ")\\n"
         << "  -h, --help    Show this help\n";
 }
 
