@@ -1,8 +1,6 @@
 #include "ip-config.hpp"
 
-#define main mpc_mpcx_command_legacy_main
-#include "mpc-mpcx-command.cpp"
-#undef main
+#include "mpc-mpcx-command.hpp"
 
 namespace {
 void unified_usage(const char* p) {
@@ -106,7 +104,7 @@ int main(int argc, char** argv) {
             return 8;
         }
 
-        return mpc_mpcx_command_legacy_main(argc, argv);
+        return run_mpc_mpcx_command(argc, argv);
     } catch (const std::exception& e) {
         std::cerr << "ERROR: " << e.what() << '\n';
         return 1;
