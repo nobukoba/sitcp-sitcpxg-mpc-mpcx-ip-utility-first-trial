@@ -17,24 +17,32 @@ constexpr uint32_t EEPROM_BASE = 0xFFFFFC00u;
 constexpr uint32_t XG_IDENTIFIER = 0xFFFFFF08u;
 constexpr int FW = 20;
 
-std::vector<uint8_t> exact(rbcp::Client& c, uint32_t a, size_t n) {
-    std::vector<uint8_t> o;
-    for (size_t x = 0; x < n; x += 8) {
-        const size_t m = std::min<size_t>(8, n - x);
-        auto b = rbcp::read_retry(c, a + static_cast<uint32_t>(x), m);
-        o.insert(o.end(), b.begin(), b.end());
+std::vector<uint8_t> read_exact(rbcp::Client& client, uint32_t address,
+                                size_t length) {
+    std::vector<uint8_t> data;
+    for (size_t offset = 0; offset < length; offset += 8) {
+        const size_t chunk_size = std::min<size_t>(8, length - offset);
+        const std::vector<uint8_t> block = rbcp::read_retry(
+            client, address + static_cast<uint32_t>(offset), chunk_size);
+        data.insert(data.end(), block.begin(), block.end());
     }
-    return o;
+    return data;
 }
-std::vector<uint8_t> xgp(const std::vector<uint8_t>& e) {
-    std::vector<uint8_t> p(e.begin(), e.begin() + 16);
-    p.insert(p.end(), e.begin() + 18, e.begin() + 24);
-    return p;
+
+std::vector<uint8_t> reconstruct_mpcx_payload(
+    const std::vector<uint8_t>& eeprom) {
+    std::vector<uint8_t> payload(eeprom.begin(), eeprom.begin() + 16);
+    payload.insert(payload.end(), eeprom.begin() + 18, eeprom.begin() + 24);
+    return payload;
 }
-std::vector<uint8_t> np(const std::vector<uint8_t>& e) {
-    std::vector<uint8_t> p(e.begin() + 0x12, e.begin() + 0x18);
-    p.insert(p.end(), e.begin() + 0x40, e.begin() + 0x50);
-    return p;
+
+std::vector<uint8_t> reconstruct_mpc_payload(
+    const std::vector<uint8_t>& eeprom) {
+    std::vector<uint8_t> payload(eeprom.begin() + 0x12,
+                                 eeprom.begin() + 0x18);
+    payload.insert(payload.end(), eeprom.begin() + 0x40,
+                   eeprom.begin() + 0x50);
+    return payload;
 }
 std::string hex(const std::vector<uint8_t>& d, size_t a = 0,
                 size_t z = SIZE_MAX, char s = ' ') {
@@ -46,9 +54,17 @@ std::string hex(const std::vector<uint8_t>& d, size_t a = 0,
 void field(const std::string& k, const std::string& v) {
     std::cout << std::left << std::setw(FW) << k << ": " << v << '\n';
 }
-std::string tn(int t) {
-    return t == 1 ? "MPCX (SiTCP-XG)" : t == 2 ? "MPC (normal SiTCP)" :
-           t == -1 ? "ambiguous" : "unknown";
+std::string type_name(int type) {
+    if (type == 1) {
+        return "MPCX (SiTCP-XG)";
+    }
+    if (type == 2) {
+        return "MPC (normal SiTCP)";
+    }
+    if (type == -1) {
+        return "ambiguous";
+    }
+    return "unknown";
 }
 int detect(rbcp::Client& c, std::string& why) {
     try {
@@ -75,10 +91,12 @@ int run_mpc_mpcx_reader(int ac, char** av) {
             else throw rbcp::Error("unknown option: " + a);
         }
         rbcp::Client client(ip, port, timeout);
-        const auto e = exact(client, EEPROM_BASE, 0x50);
+        const auto e = read_exact(client, EEPROM_BASE, 0x50);
         std::string why; const int t = detect(client, why);
-        const auto payload = t == 1 ? xgp(e) : t == 2 ? np(e) : std::vector<uint8_t>{};
-        field("command","read"); field("target",ip+":"+std::to_string(port)); field("detected type",tn(t)); field("detection",why);
+        const auto payload = t == 1 ? reconstruct_mpcx_payload(e) :
+                             t == 2 ? reconstruct_mpc_payload(e) :
+                                      std::vector<uint8_t>{};
+        field("command","read"); field("target",ip+":"+std::to_string(port)); field("detected type",type_name(t)); field("detection",why);
         if (!payload.empty()) field("reconstructed payload",hex(payload));
         field("MAC",hex(e,0x12,0x18,':'));
         if(t==1) field("MPCX FC00..FC0F",hex(e,0,16)); else if(t==2) field("MPC FC40..FC4F",hex(e,0x40,0x50));
