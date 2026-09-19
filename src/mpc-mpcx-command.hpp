@@ -144,6 +144,17 @@ std::string type_name(int t) {
     return t == 1 ? "MPCX (SiTCP-XG)" : t == 2 ? "MPC (normal SiTCP)" : "unknown";
 }
 
+std::vector<uint8_t> payload_mac(const std::vector<uint8_t>& d) {
+    const int t = classify(d);
+    if (t == 1) return std::vector<uint8_t>(d.begin() + 16, d.begin() + 22);
+    if (t == 2) return std::vector<uint8_t>(d.begin(), d.begin() + 6);
+    throw Error("invalid/unknown 22-byte MPC/MPCX payload");
+}
+
+std::string mac_string(const std::vector<uint8_t>& mac) {
+    return hex_bytes(mac, ':');
+}
+
 std::vector<uint8_t> read_file(const std::string& path) {
     std::ifstream f(path, std::ios::binary);
     if (!f) throw Error("cannot open file: " + path);
@@ -210,8 +221,20 @@ inline int run_mpc_mpcx_command(int argc, char** argv) {
             if (argc != 3) throw Error("usage: inspect FILE");
             auto p = read_file(argv[2]);
             field("command", "inspect"); field("file", argv[2]); field("size", std::to_string(p.size()) + " bytes");
-            field("payload type", type_name(classify(p))); field("writer type", std::to_string(classify(p))); field("payload", hex_bytes(p));
+            field("payload type", type_name(classify(p))); field("writer type", std::to_string(classify(p))); if (classify(p)) field("MAC", mac_string(payload_mac(p))); field("payload", hex_bytes(p));
             return classify(p) ? 0 : 2;
+        }
+
+        if (cmd == "mac") {
+            if (argc != 3) throw Error("usage: mac FILE");
+            auto p = read_file(argv[2]);
+            const int t = classify(p);
+            if (!t) throw Error("invalid/unknown 22-byte MPC/MPCX payload");
+            field("command", "mac");
+            field("file", argv[2]);
+            field("payload type", type_name(t));
+            field("MAC", mac_string(payload_mac(p)));
+            return 0;
         }
 
         if (cmd == "read") {
