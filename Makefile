@@ -10,13 +10,14 @@ SRC_DIR := src
 PROGRAMS := mpc-mpcx-ip-writer mpc-mpcx-ip-reader mpc-mpcx-ip-command \
             sitcp-sitcpxg-ip-writer sitcp-sitcpxg-ip-reader
 TARGETS := $(addprefix $(BIN_DIR)/,$(PROGRAMS))
+HEADERS := $(wildcard $(SRC_DIR)/*.hpp)
 
 all: $(TARGETS)
 
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
-HEADERS := $(wildcard $(SRC_DIR)/*.hpp)\n\n$(BIN_DIR)/%: $(SRC_DIR)/%.cpp $(HEADERS) | $(BIN_DIR)
+$(BIN_DIR)/%: $(SRC_DIR)/%.cpp $(HEADERS) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $< -o $@
 
 install: all
