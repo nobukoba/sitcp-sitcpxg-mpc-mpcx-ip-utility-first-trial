@@ -14,8 +14,6 @@ The intended public command set is:
 - `sitcp-sitcpxg-ip-writer`
 - `sitcp-sitcpxg-ip-reader`
 
-The older `mpc-mpcx-writer`, `mpc-mpcx-reader`, and `mpc-mpcx-command` sources may remain as internal implementation units while the unified commands are being refactored, but they are not public installed names.
-
 Keep command names, option defaults, and output formatting consistent. All `--help` / usage output must show the actual default value whenever an option has a default. For example, show `--port N ... (default: 4660)` and `--timeout SEC ... (default: 3)`.
 
 ## Writer CLI
@@ -53,7 +51,7 @@ MPC/MPCX payload handling and SiTCP IP-register handling may be exposed through 
 
 ## Advanced command
 
-`mpc-mpcx-ip-command` is the advanced/diagnostic interface. Preserve the MPC/MPCX and low-level RBCP subcommands `inspect`, `read`, `verify`, `mpcx-plan`, `probe`, `rbcp-read`, `rbcp-write`, and `clear`, and also provide IP read/write operations.
+`mpc-mpcx-ip-command` is the advanced/diagnostic interface. Preserve the MPC/MPCX and low-level RBCP subcommands `inspect`, `mac`, `read`, `verify`, `mpcx-plan`, `probe`, `rbcp-read`, `rbcp-write`, and `clear`, and also provide IP read/write operations.
 
 The high-level MPC/MPCX programming path should continue to use the verified writer implementation rather than creating a second divergent destructive programming path.
 
