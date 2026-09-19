@@ -45,6 +45,7 @@ MPC/MPCX payload handling and SiTCP IP-register handling may be exposed through 
 - MPC/MPCX payload classification/reconstruction must not be used to determine IP/MAC values.
 - IP/MAC register reads must not modify or reinterpret MPC/MPCX license payloads.
 - The MPC/MPCX reader must always display current MAC, current IP, EEPROM MAC, and EEPROM IP.
+- Keep common MPC/MPCX reader fields in the same order for normal SiTCP and SiTCP-XG. In particular, the `MAC` line must occupy the same output position; generation-specific FC00/FC40 detail lines must not move common fields around.
 - The MPC/MPCX writer must display those four values before and after the operation whenever the target remains reachable.
 - The standalone IP reader/writer must remain available and must not require an MPC/MPCX file.
 
