@@ -11,8 +11,8 @@ void usage(const char* program) {
         << "Options:\n"
         << "  --eeprom      Write EEPROM IP (default)\n"
         << "  --current     Write current/runtime IP, reconnect to NEW_IP, and verify\n"
-        << "  --port N      RBCP UDP port (default: " << sitcp_sitcpxg::network_config::DEFAULT_PORT << ")\n"
-        << "  --timeout SEC RBCP timeout in seconds (default: " << sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT << ")\n"
+        << "  --port N      RBCP UDP port (default: "\n        << sitcp_sitcpxg::network_config::DEFAULT_PORT << ")\n"
+        << "  --timeout SEC RBCP timeout in seconds (default: "\n        << sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT << ")\n"
         << "  -h, --help    Show this help\n";
 }
 
@@ -38,13 +38,13 @@ int main(int argc, char** argv) {
             const std::string arg = argv[i];
             if (arg == "--eeprom") {
                 if (mode_explicit && write_current) {
-                    throw sitcp_sitcpxg::network_config::Error("--eeprom and --current are mutually exclusive");
+                    throw sitcp_sitcpxg::network_config::Error(\n                        "--eeprom and --current are mutually exclusive");
                 }
                 write_current = false;
                 mode_explicit = true;
             } else if (arg == "--current") {
                 if (mode_explicit && !write_current) {
-                    throw sitcp_sitcpxg::network_config::Error("--eeprom and --current are mutually exclusive");
+                    throw sitcp_sitcpxg::network_config::Error(\n                        "--eeprom and --current are mutually exclusive");
                 }
                 write_current = true;
                 mode_explicit = true;
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
                 usage(argv[0]);
                 return 0;
             } else {
-                throw sitcp_sitcpxg::network_config::Error("unknown option: " + arg);
+                throw sitcp_sitcpxg::network_config::Error(\n                    "unknown option: " + arg);
             }
         }
 
