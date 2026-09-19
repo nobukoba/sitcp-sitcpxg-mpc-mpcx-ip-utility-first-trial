@@ -107,7 +107,7 @@ private:
         FD_SET(fd, &rfds);
         timeval tv{};
         tv.tv_sec = static_cast<long>(timeout_);
-        tv.tv_usec = static_cast<long>((timeout_ - tv.tv_sec) * 1'000'000.0);
+        tv.tv_usec = static_cast<long>((timeout_ - tv.tv_sec) * 1000000.0);
         const int rv = select(fd + 1, &rfds, nullptr, nullptr, &tv);
         if (rv == 0) {
             close(fd);
