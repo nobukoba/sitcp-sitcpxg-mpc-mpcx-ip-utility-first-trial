@@ -1,5 +1,7 @@
 #pragma once
+
 #include "sitcp-sitcpxg-rbcp.hpp"
+
 #include <arpa/inet.h>
 #include <chrono>
 #include <iomanip>
@@ -11,30 +13,151 @@
 
 namespace sitcp_sitcpxg {
 namespace network_config {
-using rbcp::Client; using rbcp::Error; using rbcp::Timeout;
+
+using rbcp::Client;
+using rbcp::Error;
+using rbcp::Timeout;
+
 constexpr uint16_t DEFAULT_PORT = rbcp::DEFAULT_PORT;
 constexpr double DEFAULT_TIMEOUT = rbcp::DEFAULT_TIMEOUT;
-constexpr uint32_t CURRENT_MAC=0xFFFFFF12u, CURRENT_IP=0xFFFFFF18u;
-constexpr uint32_t EEPROM_MAC=0xFFFFFC12u, EEPROM_IP=0xFFFFFC18u, EEPROM_WE=0xFFFFFCFFu;
+
+constexpr uint32_t CURRENT_MAC = 0xFFFFFF12u;
+constexpr uint32_t CURRENT_IP = 0xFFFFFF18u;
+constexpr uint32_t EEPROM_MAC = 0xFFFFFC12u;
+constexpr uint32_t EEPROM_IP = 0xFFFFFC18u;
+constexpr uint32_t EEPROM_WRITE_ENABLE = 0xFFFFFCFFu;
 
 inline std::vector<uint8_t> parse_ipv4(const std::string& value) {
-    in_addr address{}; if (inet_pton(AF_INET,value.c_str(),&address)!=1) throw Error("invalid IPv4 address: "+value);
-    const auto* b=reinterpret_cast<const uint8_t*>(&address.s_addr); return {b[0],b[1],b[2],b[3]};
+    in_addr address{};
+    if (inet_pton(AF_INET, value.c_str(), &address) != 1) {
+        throw Error("invalid IPv4 address: " + value);
+    }
+
+    const uint8_t* bytes =
+        reinterpret_cast<const uint8_t*>(&address.s_addr);
+    return {bytes[0], bytes[1], bytes[2], bytes[3]};
 }
-inline std::string ipv4(const std::vector<uint8_t>& d) {
-    if(d.size()!=4) throw Error("invalid IP read length");
-    return std::to_string(d[0])+"."+std::to_string(d[1])+"."+std::to_string(d[2])+"."+std::to_string(d[3]);
+
+inline std::string ipv4_string(const std::vector<uint8_t>& data) {
+    if (data.size() != 4) {
+        throw Error("invalid IP read length");
+    }
+
+    return std::to_string(data[0]) + "." +
+           std::to_string(data[1]) + "." +
+           std::to_string(data[2]) + "." +
+           std::to_string(data[3]);
 }
-inline std::string mac(const std::vector<uint8_t>& d) {
-    if(d.size()!=6) throw Error("invalid MAC read length");
-    std::ostringstream o; o<<std::hex<<std::uppercase<<std::setfill('0');
-    for(size_t i=0;i<d.size();++i){if(i)o<<':';o<<std::setw(2)<<static_cast<unsigned>(d[i]);} return o.str();
+
+inline std::string mac_string(const std::vector<uint8_t>& data) {
+    if (data.size() != 6) {
+        throw Error("invalid MAC read length");
+    }
+
+    std::ostringstream output;
+    output << std::hex << std::uppercase << std::setfill('0');
+    for (size_t i = 0; i < data.size(); ++i) {
+        if (i != 0) {
+            output << ':';
+        }
+        output << std::setw(2) << static_cast<unsigned>(data[i]);
+    }
+    return output.str();
 }
-struct Snapshot { std::vector<uint8_t> current_mac,current_ip,eeprom_mac,eeprom_ip; };
-inline Snapshot read_snapshot(Client& c){return {rbcp::read_retry(c,CURRENT_MAC,6),rbcp::read_retry(c,CURRENT_IP,4),rbcp::read_retry(c,EEPROM_MAC,6),rbcp::read_retry(c,EEPROM_IP,4)};}
-inline void print_snapshot(const Snapshot&s,const std::string&p=""){std::cout<<p<<"current MAC  : "<<mac(s.current_mac)<<'\n'<<p<<"current IP   : "<<ipv4(s.current_ip)<<'\n'<<p<<"EEPROM MAC   : "<<mac(s.eeprom_mac)<<'\n'<<p<<"EEPROM IP    : "<<ipv4(s.eeprom_ip)<<'\n';}
-inline Snapshot show_all(const std::string&h,uint16_t p,double t,const std::string&prefix=""){Client c(h,p,t);auto s=read_snapshot(c);print_snapshot(s,prefix);return s;}
-inline void write_eeprom_ip(const std::string&h,const std::string&v,uint16_t p,double t){Client c(h,p,t);auto b=parse_ipv4(v);c.write(EEPROM_WE,{0});try{c.write(EEPROM_IP,b);}catch(...){try{c.write(EEPROM_WE,{0xff});}catch(...){}throw;}c.write(EEPROM_WE,{0xff});if(rbcp::read_retry(c,EEPROM_IP,4)!=b)throw Error("EEPROM IP read-back mismatch");}
-inline void write_current_ip(const std::string&h,const std::string&v,uint16_t p,double t){auto b=parse_ipv4(v);Client old(h,p,t);try{old.write(CURRENT_IP,b);}catch(const Timeout&){}std::this_thread::sleep_for(std::chrono::milliseconds(200));Client now(v,p,t);if(rbcp::read_retry(now,CURRENT_IP,4)!=b)throw Error("current IP read-back mismatch at new address "+v);}
-} // network_config
-} // sitcp_sitcpxg
+
+struct Snapshot {
+    std::vector<uint8_t> current_mac;
+    std::vector<uint8_t> current_ip;
+    std::vector<uint8_t> eeprom_mac;
+    std::vector<uint8_t> eeprom_ip;
+};
+
+inline Snapshot read_snapshot(Client& client) {
+    Snapshot snapshot;
+    snapshot.current_mac = rbcp::read_retry(client, CURRENT_MAC, 6);
+    snapshot.current_ip = rbcp::read_retry(client, CURRENT_IP, 4);
+    snapshot.eeprom_mac = rbcp::read_retry(client, EEPROM_MAC, 6);
+    snapshot.eeprom_ip = rbcp::read_retry(client, EEPROM_IP, 4);
+    return snapshot;
+}
+
+inline void print_snapshot(const Snapshot& snapshot,
+                           const std::string& prefix = "") {
+    std::cout
+        << prefix << "current MAC  : " << mac_string(snapshot.current_mac) << '\n'
+        << prefix << "current IP   : " << ipv4_string(snapshot.current_ip) << '\n'
+        << prefix << "EEPROM MAC   : " << mac_string(snapshot.eeprom_mac) << '\n'
+        << prefix << "EEPROM IP    : " << ipv4_string(snapshot.eeprom_ip) << '\n';
+}
+
+inline Snapshot show_all(const std::string& host, uint16_t port,
+                         double timeout, const std::string& prefix = "") {
+    Client client(host, port, timeout);
+    const Snapshot snapshot = read_snapshot(client);
+    print_snapshot(snapshot, prefix);
+    return snapshot;
+}
+
+inline void set_eeprom_write_enable(Client& client, bool enabled) {
+    const std::vector<uint8_t> value(
+        1, static_cast<uint8_t>(enabled ? 0x00 : 0xFF));
+    const std::vector<uint8_t> ack =
+        client.write(EEPROM_WRITE_ENABLE, value);
+    if (ack.size() != value.size()) {
+        throw Error("unexpected RBCP ACK length for EEPROM write-enable");
+    }
+}
+
+inline void write_eeprom_ip(const std::string& host,
+                            const std::string& new_ip,
+                            uint16_t port, double timeout) {
+    Client client(host, port, timeout);
+    const std::vector<uint8_t> bytes = parse_ipv4(new_ip);
+
+    set_eeprom_write_enable(client, true);
+    try {
+        const std::vector<uint8_t> ack = client.write(EEPROM_IP, bytes);
+        if (ack.size() != bytes.size()) {
+            throw Error("unexpected RBCP ACK length for EEPROM IP write");
+        }
+    } catch (...) {
+        try {
+            set_eeprom_write_enable(client, false);
+        } catch (...) {
+        }
+        throw;
+    }
+    set_eeprom_write_enable(client, false);
+
+    if (rbcp::read_retry(client, EEPROM_IP, 4) != bytes) {
+        throw Error("EEPROM IP read-back mismatch");
+    }
+}
+
+inline void write_current_ip(const std::string& host,
+                             const std::string& new_ip,
+                             uint16_t port, double timeout) {
+    const std::vector<uint8_t> bytes = parse_ipv4(new_ip);
+    Client old_client(host, port, timeout);
+
+    try {
+        const std::vector<uint8_t> ack =
+            old_client.write(CURRENT_IP, bytes);
+        if (ack.size() != bytes.size()) {
+            throw Error("unexpected RBCP ACK length for current IP write");
+        }
+    } catch (const Timeout&) {
+        // The address may change before the UDP acknowledgement returns.
+        // Do not retry this destructive write. Verify through the new address.
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    Client new_client(new_ip, port, timeout);
+    if (rbcp::read_retry(new_client, CURRENT_IP, 4) != bytes) {
+        throw Error("current IP read-back mismatch at new address " + new_ip);
+    }
+}
+
+}  // namespace network_config
+}  // namespace sitcp_sitcpxg
