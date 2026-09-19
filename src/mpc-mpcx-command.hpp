@@ -196,7 +196,7 @@ TargetArgs parse_target(int argc, char** argv, int start) {
 void usage(const char* p) {
     std::cerr << "Usage: " << p << " COMMAND ...\n\n"
               << "Commands:\n"
-              << "  inspect FILE\n"
+              << "  inspect MPC_OR_MPCX_FILE\n"
               << "  read IP [--port N] [--timeout SEC]\n"
               << "  verify IP FILE [--port N] [--timeout SEC]\n"
               << "  mpcx-plan IP FILE [--port N] [--timeout SEC]\n"
@@ -218,7 +218,7 @@ inline int run_mpc_mpcx_command(int argc, char** argv) {
         const std::string cmd = argv[1];
 
         if (cmd == "inspect") {
-            if (argc != 3) throw Error("usage: inspect FILE");
+            if (argc != 3) throw Error("usage: inspect MPC_OR_MPCX_FILE");
             auto p = read_file(argv[2]);
             field("command", "inspect"); field("file", argv[2]); field("size", std::to_string(p.size()) + " bytes");
             field("payload type", type_name(classify(p))); field("writer type", std::to_string(classify(p))); if (classify(p)) field("MAC", mac_string(payload_mac(p))); field("payload", hex_bytes(p));
@@ -226,7 +226,7 @@ inline int run_mpc_mpcx_command(int argc, char** argv) {
         }
 
         if (cmd == "mac") {
-            if (argc != 3) throw Error("usage: mac FILE");
+            if (argc != 3) throw Error("usage: mac MPC_OR_MPCX_FILE");
             auto p = read_file(argv[2]);
             const int t = classify(p);
             if (!t) throw Error("invalid/unknown 22-byte MPC/MPCX payload");
