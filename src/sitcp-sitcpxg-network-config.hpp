@@ -43,10 +43,17 @@ inline std::string ipv4_string(const std::vector<uint8_t>& data) {
         throw Error("invalid IP read length");
     }
 
-    return std::to_string(data[0]) + "." +
-           std::to_string(data[1]) + "." +
-           std::to_string(data[2]) + "." +
-           std::to_string(data[3]);
+    std::ostringstream output;
+    output << static_cast<unsigned>(data[0]) << '.'
+           << static_cast<unsigned>(data[1]) << '.'
+           << static_cast<unsigned>(data[2]) << '.'
+           << static_cast<unsigned>(data[3]) << " (0x"
+           << std::hex << std::uppercase << std::setfill('0');
+    for (uint8_t byte : data) {
+        output << std::setw(2) << static_cast<unsigned>(byte);
+    }
+    output << ')';
+    return output.str();
 }
 
 inline std::string mac_string(const std::vector<uint8_t>& data) {
@@ -88,6 +95,21 @@ inline void print_snapshot(const Snapshot& snapshot,
         << prefix << "current IP   : " << ipv4_string(snapshot.current_ip) << '\n'
         << prefix << "EEPROM MAC   : " << mac_string(snapshot.eeprom_mac) << '\n'
         << prefix << "EEPROM IP    : " << ipv4_string(snapshot.eeprom_ip) << '\n';
+}
+
+inline void print_success() {
+    std::cout << "\nSuccess! All operations completed and verified.\n\n";
+}
+
+inline void show_compact(const std::string& host, uint16_t port,
+                         double timeout, const std::string& phase) {
+    Client client(host, port, timeout);
+    const Snapshot snapshot = read_snapshot(client);
+    const std::string label = phase + (phase == "after" ? ":  " : ": ");
+    std::cout << label << "runtime MAC " << mac_string(snapshot.current_mac)
+              << ", IP " << ipv4_string(snapshot.current_ip) << '\n'
+              << label << "EEPROM  MAC " << mac_string(snapshot.eeprom_mac)
+              << ", IP " << ipv4_string(snapshot.eeprom_ip) << std::endl;
 }
 
 inline Snapshot show_all(const std::string& host, uint16_t port,

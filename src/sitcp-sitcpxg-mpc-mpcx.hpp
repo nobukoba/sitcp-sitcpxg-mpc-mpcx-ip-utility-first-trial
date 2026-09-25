@@ -1,6 +1,8 @@
 #pragma once
 
 #include "sitcp-sitcpxg-rbcp.hpp"
+#include "sitcp-sitcpxg-eeprom-init.hpp"
+#include "sitcp-sitcpxg-eeprom-clear.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -427,18 +429,22 @@ inline int run_mpc_mpcx_command(int argc, char** argv) {
                     throw Error("payload is not classified as SiTCP-XG");
                 }
 
-                std::vector<uint8_t> expected(
-                    eeprom.begin(), eeprom.begin() + 24);
-                std::copy(payload.begin(), payload.begin() + 16,
-                          expected.begin());
-                std::copy(payload.begin() + 16, payload.end(),
-                          expected.begin() + 18);
-
-                const std::vector<uint8_t> preserved = {
-                    eeprom[16], eeprom[17]
-                };
+                const std::vector<uint8_t> identifier =
+                    rbcp::read_retry(client, 0xFFFFFF08u, 4);
+                const std::vector<uint8_t> xg_identifier = {0x58, 0x54, 0x43, 0x50};
+                if (identifier != xg_identifier) {
+                    throw Error("mpcx-plan requires a SiTCP-XG target");
+                }
+                bool initialized = false;
+                const std::vector<uint8_t> expected =
+                    sitcp_sitcpxg::eeprom_init::prepare_mpcx_image(
+                        client, eeprom, payload, initialized);
                 field("command", "mpcx-plan");
-                field("preserved FC10..FC11", hex_bytes(preserved));
+                field("EEPROM initialization", initialized
+                      ? "current RAM settings" : "not needed; preserve EEPROM");
+                field("FC10..FC11 source", initialized ? "runtime" : "EEPROM");
+                field("write range", initialized
+                      ? "0xFFFFFC00..0xFFFFFC4F" : "0xFFFFFC00..0xFFFFFC17");
                 field("EEPROM record", hex_bytes(expected));
                 field("status", "NO WRITE PERFORMED");
                 return 0;
@@ -482,46 +488,7 @@ inline int run_mpc_mpcx_command(int argc, char** argv) {
                 argv[0], ip, argc, argv, 4);
             RbcpClient client(target.ip, target.port, target.timeout);
 
-            const std::vector<uint8_t> enable(1, 0x00);
-            const std::vector<uint8_t> protect(1, 0xFF);
-            const std::vector<uint8_t> erased_block(16, 0xFF);
-
-            const std::vector<uint8_t> enable_ack =
-                client.write(EEPROM_WRITE_ENABLE, enable);
-            if (enable_ack.size() != enable.size()) {
-                throw Error(
-                    "unexpected RBCP ACK length enabling EEPROM writes");
-            }
-
-            try {
-                for (uint32_t offset = 0; offset < 0x80; offset += 16) {
-                    const std::vector<uint8_t> ack = client.write(
-                        EEPROM_BASE + offset, erased_block);
-                    if (ack.size() != erased_block.size()) {
-                        throw Error(
-                            "unexpected RBCP ACK length while clearing EEPROM");
-                    }
-                }
-            } catch (...) {
-                try {
-                    client.write(EEPROM_WRITE_ENABLE, protect);
-                } catch (...) {
-                }
-                throw;
-            }
-
-            const std::vector<uint8_t> protect_ack =
-                client.write(EEPROM_WRITE_ENABLE, protect);
-            if (protect_ack.size() != protect.size()) {
-                throw Error(
-                    "unexpected RBCP ACK length restoring EEPROM protection");
-            }
-
-            const std::vector<uint8_t> actual =
-                read_exact(client, EEPROM_BASE, 0x80);
-            if (actual != std::vector<uint8_t>(0x80, 0xFF)) {
-                throw Error("EEPROM clear read-back verification failed");
-            }
+            sitcp_sitcpxg::eeprom_clear::clear_and_verify(client);
 
             field("command", "clear");
             field("EEPROM area", "0xFFFFFC00..0xFFFFFC7F");

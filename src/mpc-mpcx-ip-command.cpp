@@ -1,4 +1,4 @@
-#include "sitcp-sitcpxg-network-config.hpp"
+#include "sitcp-sitcpxg-register-report.hpp"
 #include "sitcp-sitcpxg-mpc-mpcx.hpp"
 
 #include <cstdint>
@@ -27,6 +27,8 @@ void unified_usage(const char* program) {
         << "  ip-write CURRENT_IP NEW_IP [--eeprom|--current]"
            " [--port N] [--timeout SEC]\n"
         << "  write ...  Use mpc-mpcx-ip-writer\n\n"
+        << "read/ip-read: runtime SiTCP 64 / XG 80 bytes; EEPROM 80 bytes.\n"
+        << "Register values are shown in decimal and hexadecimal.\n\n"
         << "Defaults:\n"
         << "  --port N       RBCP UDP port (default: "
         << network_config::DEFAULT_PORT << ")\n"
@@ -77,8 +79,9 @@ int main(int argc, char** argv) {
             uint16_t port = network_config::DEFAULT_PORT;
             double timeout = network_config::DEFAULT_TIMEOUT;
             parse_common_options(argc, argv, 3, port, timeout);
-            network_config::show_all(argv[2], port, timeout);
-            return 0;
+            const bool complete =
+                sitcp_sitcpxg::register_report::show(argv[2], port, timeout);
+            return complete ? 0 : 3;
         }
 
         if (command == "ip-write") {
@@ -131,8 +134,7 @@ int main(int argc, char** argv) {
                 }
             }
 
-            std::cout << "before:\n";
-            network_config::show_all(host, port, timeout, "  ");
+            network_config::show_compact(host, port, timeout, "before");
 
             std::string final_host = host;
             if (write_current) {
@@ -144,9 +146,8 @@ int main(int argc, char** argv) {
                     host, new_ip, port, timeout);
             }
 
-            std::cout << "after:\n";
-            network_config::show_all(final_host, port, timeout, "  ");
-            std::cout << "status       : WRITE/VERIFY OK\n";
+            network_config::show_compact(final_host, port, timeout, "after");
+            network_config::print_success();
             return 0;
         }
 
@@ -159,9 +160,9 @@ int main(int argc, char** argv) {
             double timeout = network_config::DEFAULT_TIMEOUT;
             parse_common_options(argc, argv, 3, port, timeout);
 
-            std::cout << "network configuration:\n";
-            network_config::show_all(argv[2], port, timeout, "  ");
-            std::cout << "\nMPC/MPCX information:\n";
+            const bool complete =
+                sitcp_sitcpxg::register_report::show(argv[2], port, timeout);
+            return complete ? 0 : 3;
         }
 
         if (command == "write") {

@@ -18,7 +18,7 @@ Keep command names, option defaults, and output formatting consistent. All `--he
 
 ## Writer CLI
 
-The high-level writer requires an MPC/MPCX file:
+The high-level programming mode requires an MPC/MPCX file:
 
 ```text
 mpc-mpcx-ip-writer CURRENT_IP MPC_OR_MPCX_FILE [options]
@@ -33,7 +33,11 @@ IP rewriting is optional and uses explicit destination-specific options:
 - When both are specified, perform EEPROM IP writing before current/runtime IP writing so the original address remains reachable until the final network-address-changing operation.
 - After changing current/runtime IP, reconnect to the new address and perform read-back verification.
 
-The writer must always program/verify the supplied MPC/MPCX file. IP-only operation through `mpc-mpcx-ip-writer` is not part of the public CLI. Keep the standalone `sitcp-sitcpxg-ip-writer` and `sitcp-sitcpxg-ip-reader` commands for IP-only use.
+The programming mode must always program/verify the supplied MPC/MPCX file.
+The explicit `CURRENT_IP --clear` mode requires no file and only erases/verifies
+EEPROM FC00..FC7F, restoring protection. Reject file/IP-change combinations
+before any device access. Never clear automatically before programming.
+IP-only operation through `mpc-mpcx-ip-writer` is not part of the public CLI. Keep the standalone `sitcp-sitcpxg-ip-writer` and `sitcp-sitcpxg-ip-reader` commands for IP-only use.
 
 ## Unified CLI, separated internals
 
@@ -97,11 +101,20 @@ Do not guess additional destructive register mappings.
 
 ## Installation
 
-Default `PREFIX` is `$(CURDIR)/install`, not `/usr/local`. `make install` must work without root privileges and install all five public commands. System installation remains available with `PREFIX=/usr/local`.
+Default `PREFIX` is `$(CURDIR)`, not `/usr/local`. `make install` must work without root privileges and install all five public commands. System installation remains available with `PREFIX=/usr/local`.
+
+README usage examples must consistently use the default installed path
+`./bin/`. Explain `./src/` separately as build output for development.
+Document that `make` alone does not refresh installed copies and that
+`make install` rebuilds and copies them after source updates.
+`make clean` removes only the five generated executables in `src/`; it must
+never remove the source directory or installed binaries.
 
 ## Safety
 
-`mpc-mpcx-ip-command rbcp-write` and `clear` are intentionally low-level/destructive. Keep explicit command names and the `--yes-really-clear` guard for clear.
+`mpc-mpcx-ip-command rbcp-write` and `clear` are intentionally low-level/destructive. Keep explicit command names and the `--yes-really-clear` guard for the advanced clear command.
+Writer `--clear` is an explicit standalone clear-only request and needs no
+additional guard. Both entry points share `sitcp-sitcpxg-eeprom-clear.hpp`.
 
 Never commit proprietary MPC/MPCX files, official proprietary executables/libraries, credentials, or device-specific secrets.
 
@@ -124,3 +137,59 @@ Keep these documents synchronized with implementation changes:
 7. Keep the entire public build compatible with C++11.
 8. Refactor temporary wrapper/include structure into shared implementation modules when stable.
 9. Reformat compressed legacy C++ as it is touched and keep new code readable.
+
+## Diagnostic report consistency
+
+- Select diagnostic runtime length by the exact XG identifier, not file suffix
+  or EEPROM payload: normal SiTCP reads FF00..FF3F (64 bytes), XG reads
+  FF00..FF4F (80 bytes). Never request FF40..FF4F for normal SiTCP reports.
+- EEPROM stays FC00..FC4F (80 bytes) for both generations; normal MPC needs
+  its FC40..FC4F license data. Keep the two regions separately labeled with
+  the actual range/length; COMPLETE means all bytes in those selected ranges.
+- If generation detection times out, fail before reading a guessed range.
+- Share detailed report logic across the MPC/MPCX reader and advanced read/ip-read.
+- Writer success output must stay within five nonempty lines: two compact MAC/IP lines
+  before, two after, a blank line, then exactly
+  `Success! All operations completed and verified.`, followed by a blank line.
+  Align labels using one space after `before:` and two after `after:`. Only print success after
+  all requested operations and verification succeed; omit target/status metadata. Apply this to MPC/MPCX programming,
+  writer --clear, standalone IP writer, and advanced ip-write. Use shared
+  network snapshots instead of full diagnostic dumps; preserve verification
+  and failure reporting. Reader output remains detailed.
+- Display decoded numeric register values in decimal and hexadecimal together;
+  retain units and conventional IP/MAC notation. Append eight uppercase hex
+  digits in network byte order to displayed register IPs, including server IP
+  and compact IP-only views: `192.168.10.10 (0xC0A80A0A)`. Raw dumps remain hex.
+- Decode each region from its own bytes. Only apply the XG parameter map after
+  exact identifier detection, never to normal SiTCP license bytes.
+- Diagnostic block bus errors must fall back to byte reads, preserve readable
+  data, mark rejected bytes `??`, and report their addresses. Decode only fields
+  whose bytes are all readable. Read views return 3 for partial reports; never
+  invent bytes or claim a complete read. Timeouts/short replies remain fatal.
+- Partial diagnostic bus errors must not block the existing verified writer
+  path. Keep standalone IP-only commands compact.
+- Run `python3 tests/test_register_report.py` after changing diagnostic reports.
+
+## MPCX EEPROM initialization
+
+- Use `src/sitcp-sitcpxg-eeprom-init.hpp` for both writer image preparation and
+  read-only `mpcx-plan`. Validate the file and exact XG identifier before use.
+- EEPROM FC10 bit7 selects initialization, including FF after clear; do not use
+  license classification, rate validity, or an all-FF-image test instead.
+- If initialization is needed, require a complete runtime FF00..FF4F image,
+  verify its XG identifier and reject a set runtime RESET bit. Overlay MPCX
+  bytes at FC00..FC0F and FC12..FC17; retain RAM at FC10..FC11 and FC18..FC4F.
+  Write/read-back verify the resulting 80 bytes, including FC40..FC4F.
+- If FC10 bit7 is clear, keep the 24-byte MPCX programming path and preserve
+  EEPROM configuration. Do not replace an existing rate because it looks odd.
+- Never program diagnostic placeholder bytes or mix partial RAM with invented
+  defaults. No verified MPCX default image exists in our evidence. The official
+  normal-SiTCP fallback table must not be reused for SiTCP-XG.
+- Leave FC50..FC7F unchanged; official optional extension copying is outside
+  this implementation. Do not imply full official-tool equivalence.
+- Always prepare the complete image before enabling writes. Attempt protection
+  restoration even after an ambiguous enable ACK; never retry data writes.
+- Keep EEPROM IP overrides after image programming, and runtime IP changes
+  last with reconnect/read-back verification. Never clear implicitly.
+- Keep public documentation, static-analysis findings, and physical-device
+  verification distinct. Run `python3 -m unittest discover -s tests -v`.

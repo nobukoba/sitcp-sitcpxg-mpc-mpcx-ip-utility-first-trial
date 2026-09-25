@@ -1,2 +1,10 @@
 bin/
 .DS_Store
+__pycache__/
+
+# Executables built alongside the C++ sources
+/src/mpc-mpcx-ip-writer
+/src/mpc-mpcx-ip-reader
+/src/mpc-mpcx-ip-command
+/src/sitcp-sitcpxg-ip-writer
+/src/sitcp-sitcpxg-ip-reader

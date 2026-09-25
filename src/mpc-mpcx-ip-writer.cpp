@@ -1,4 +1,6 @@
 #include "sitcp-sitcpxg-network-config.hpp"
+#include "sitcp-sitcpxg-eeprom-init.hpp"
+#include "sitcp-sitcpxg-eeprom-clear.hpp"
 #include "sitcp-sitcpxg-rbcp.hpp"
 
 #include <algorithm>
@@ -59,22 +61,6 @@ void write_exact(
     }
 }
 
-std::string hex_bytes(const std::vector<uint8_t>& data,
-                      size_t begin = 0, size_t end = static_cast<size_t>(-1),
-                      char separator = ' ') {
-    end = std::min(end, data.size());
-
-    std::ostringstream output;
-    output << std::hex << std::setfill('0');
-    for (size_t i = begin; i < end; ++i) {
-        if (i != begin) {
-            output << separator;
-        }
-        output << std::setw(2) << static_cast<unsigned>(data[i]);
-    }
-    return output.str();
-}
-
 void field(const std::string& name, const std::string& value) {
     std::cout << std::left << std::setw(FIELD_WIDTH)
               << name << ": " << value << '\n';
@@ -126,12 +112,6 @@ int classify_payload(const std::vector<uint8_t>& data) {
     return 0;
 }
 
-std::string type_name(int t) {
-    return t == 1 ? "MPCX (SiTCP-XG)" :
-           t == 2 ? "MPC (normal SiTCP)" :
-           t == -1 ? "ambiguous" : "unknown";
-}
-
 int detect_target(RbcpClient& c, std::string& why) {
     try {
         const auto identifier = rbcp::read_retry(c, XG_IDENTIFIER, 4);
@@ -171,31 +151,32 @@ void set_write_enable(RbcpClient& c, bool enabled) {
 }
 
 std::vector<uint8_t> program(
-    RbcpClient& c, const std::vector<uint8_t>& payload, int type) {
+    RbcpClient& client, const std::vector<uint8_t>& payload, int type,
+    const std::vector<uint8_t>& eeprom) {
     std::vector<uint8_t> image;
     if (type == 1) {
-        image = read_exact(c, EEPROM_BASE, 24);
-        std::copy(payload.begin(), payload.begin() + 16, image.begin());
-        std::copy(payload.begin() + 16, payload.end(), image.begin() + 18);
+        bool initialized = false;
+        image = sitcp_sitcpxg::eeprom_init::prepare_mpcx_image(
+            client, eeprom, payload, initialized);
     } else {
-        image = read_exact(c, EEPROM_BASE, 0x50);
+        image = eeprom;
         std::copy(payload.begin(), payload.begin() + 6, image.begin() + 0x12);
         std::copy(payload.begin() + 6, payload.end(), image.begin() + 0x40);
     }
 
-    set_write_enable(c, true);
     try {
-        write_exact(c, EEPROM_BASE, image, 16);
+        set_write_enable(client, true);
+        write_exact(client, EEPROM_BASE, image, 16);
     } catch (...) {
         try {
-            set_write_enable(c, false);
+            set_write_enable(client, false);
         } catch (...) {
         }
         throw;
     }
-    set_write_enable(c, false);
+    set_write_enable(client, false);
 
-    const auto actual = read_exact(c, EEPROM_BASE, image.size());
+    const auto actual = read_exact(client, EEPROM_BASE, image.size());
     if (actual != image) {
         size_t i = 0;
         while (i < image.size() && actual[i] == image[i]) {
@@ -272,15 +253,6 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
         std::string detection;
         const int target_type = detect_target(client, detection);
 
-        field("command", "write");
-        field("target", ip + ":" + std::to_string(port));
-        field("file", file_path);
-        field("file type", type_name(file_type));
-        field("target type", type_name(target_type));
-        field("detection", detection);
-        field("writer type", std::to_string(file_type));
-        field("file payload", hex_bytes(payload));
-
         if ((target_type == 1 || target_type == 2) && target_type != file_type) {
             field("status", "REFUSED: TARGET TYPE MISMATCH");
             return 7;
@@ -290,20 +262,7 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
             return 7;
         }
 
-        field("operation", "programming EEPROM");
-        const auto rb = program(client, payload, file_type);
-        if (file_type == 1) {
-            field("preserved FC10..FC11", hex_bytes(rb, 16, 18));
-            field("read-back FC00..FC17", hex_bytes(rb));
-            field("read-back MAC", hex_bytes(rb, 18, 24, ':'));
-        } else {
-            field("read-back MAC", hex_bytes(rb, 0x12, 0x18, ':'));
-            field("read-back FC40..FC4F", hex_bytes(rb, 0x40, 0x50));
-        }
-        field("write", "OK");
-        field("read-back verify", "OK");
-        field("EEPROM write protect", "ENABLED");
-        field("status", "WRITE OK");
+        program(client, payload, file_type, eeprom);
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "ERROR: " << e.what() << "\n";
@@ -316,9 +275,15 @@ namespace {
 
 void unified_usage(const char* program) {
     std::cerr
-        << "Usage: " << program << " CURRENT_IP MPC_OR_MPCX_FILE [options]\n\n"
-        << "Programs an MPC/MPCX file and optionally changes the SiTCP IP address.\n\n"
+        << "Usage: " << program << " CURRENT_IP MPC_OR_MPCX_FILE [options]\n"
+        << "       " << program << " CURRENT_IP --clear [--port N] [--timeout SEC]\n\n"
+        << "Programs an MPC/MPCX file and optionally changes the SiTCP IP address.\n"
+        << "For uninitialized MPCX EEPROM (FC10 bit7 set), restores settings\n"
+        << "from complete runtime FF00..FF4F before overlaying the MPCX file.\n"
+        << "If runtime cannot be read, stops before writing; no guessed defaults.\n\n"
         << "Options:\n"
+        << "  --clear              Clear only: erase EEPROM FC00..FC7F (default: off)\n"
+        << "                       Deletes license/settings; no file or IP changes allowed\n"
         << "  --set-eeprom-ip IP   Set EEPROM/default IP address\n"
         << "  --set-current-ip IP  Set current/runtime IP address\n"
         << "  --port N             RBCP UDP port (default: "
@@ -345,7 +310,9 @@ int main(int argc, char** argv) {
         }
 
         const std::string host = argv[1];
-        const std::string file = argv[2];
+        const bool has_file = std::string(argv[2]).find("--") != 0;
+        const std::string file = has_file ? argv[2] : "";
+        bool clear_only = false;
 
         bool has_eeprom_ip = false;
         bool has_current_ip = false;
@@ -354,10 +321,12 @@ int main(int argc, char** argv) {
         uint16_t port = sitcp_sitcpxg::network_config::DEFAULT_PORT;
         double timeout = sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT;
 
-        for (int i = 3; i < argc; ++i) {
+        for (int i = has_file ? 3 : 2; i < argc; ++i) {
             const std::string option = argv[i];
 
-            if (option == "--set-eeprom-ip" && i + 1 < argc) {
+            if (option == "--clear") {
+                clear_only = true;
+            } else if (option == "--set-eeprom-ip" && i + 1 < argc) {
                 eeprom_ip = argv[++i];
                 has_eeprom_ip = true;
                 (void)sitcp_sitcpxg::network_config::parse_ipv4(eeprom_ip);
@@ -384,8 +353,23 @@ int main(int argc, char** argv) {
             }
         }
 
-        std::cout << "before:\n";
-        sitcp_sitcpxg::network_config::show_all(host, port, timeout, "  ");
+        if (clear_only && (has_file || has_eeprom_ip || has_current_ip)) {
+            throw std::runtime_error(
+                "--clear is clear-only; do not specify an MPC/MPCX file or IP changes");
+        }
+        if (!clear_only && !has_file) {
+            throw std::runtime_error("an MPC/MPCX file or --clear is required");
+        }
+
+        sitcp_sitcpxg::network_config::show_compact(host, port, timeout, "before");
+
+        if (clear_only) {
+            rbcp::Client client(host, port, timeout);
+            sitcp_sitcpxg::eeprom_clear::clear_and_verify(client);
+            sitcp_sitcpxg::network_config::show_compact(host, port, timeout, "after");
+            sitcp_sitcpxg::network_config::print_success();
+            return 0;
+        }
 
         std::vector<std::string> writer_args;
         writer_args.push_back(argv[0]);
@@ -409,20 +393,17 @@ int main(int argc, char** argv) {
         }
 
         if (has_eeprom_ip) {
-            std::cout << "EEPROM IP operation : " << eeprom_ip << '\n';
             sitcp_sitcpxg::network_config::write_eeprom_ip(host, eeprom_ip, port, timeout);
         }
 
         std::string final_host = host;
         if (has_current_ip) {
-            std::cout << "current IP operation: " << current_ip << '\n';
             sitcp_sitcpxg::network_config::write_current_ip(host, current_ip, port, timeout);
             final_host = current_ip;
         }
 
-        std::cout << "after:\n";
-        sitcp_sitcpxg::network_config::show_all(final_host, port, timeout, "  ");
-        std::cout << "status       : WRITE/VERIFY OK\n";
+        sitcp_sitcpxg::network_config::show_compact(final_host, port, timeout, "after");
+        sitcp_sitcpxg::network_config::print_success();
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "ERROR: " << error.what() << '\n';
