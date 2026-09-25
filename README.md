@@ -25,23 +25,62 @@ make install
 
 ## How to use the writer
 
-For programming, the MPC/MPCX file is a required positional argument:
-
-```text
-mpc-mpcx-ip-writer CURRENT_IP MPC_OR_MPCX_FILE [options]
-```
-
-Write MPC/MPCX information only:
+Write an MPC/MPCX file to the device:
 
 ```bash
 ./bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx
 ```
 
-Write MPC/MPCX information and also set the EEPROM/default IP:
+Write the file and set the saved EEPROM IP address:
 
 ```bash
 ./bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx \
   --set-eeprom-ip 192.168.2.170
+```
+
+Clear the EEPROM only, without writing a file:
+
+```bash
+./bin/mpc-mpcx-ip-writer 192.168.10.10 --clear
+```
+
+`--clear` erases the saved license and settings. Use it on its own, without a
+file or IP-change options. Reprogram the appropriate license before normal use.
+
+## How to use the reader
+
+```bash
+./bin/mpc-mpcx-ip-reader 192.168.2.161
+```
+
+Displays runtime and EEPROM contents separately, including MAC/IP addresses
+and MPC/MPCX information. See the [Appendix](#appendix) for report details.
+
+## How to use the IP-only commands
+
+Use these when only SiTCP / SiTCP-XG IP configuration is needed and no MPC/MPCX file should be involved:
+
+```bash
+./bin/sitcp-sitcpxg-ip-reader 192.168.2.161
+./bin/sitcp-sitcpxg-ip-writer 192.168.2.161 192.168.2.170
+```
+
+The IP-only commands share the low-level IP register helper but do not read or rewrite MPC/MPCX payload data.
+
+## How to use the advanced command
+
+```bash
+./bin/mpc-mpcx-ip-command --help
+```
+
+For diagnostics and low-level operations, see the [command reference](#advanced-command-reference).
+
+## Appendix
+
+### Writer options and behavior
+
+```text
+mpc-mpcx-ip-writer CURRENT_IP MPC_OR_MPCX_FILE [options]
 ```
 
 Write MPC/MPCX information and also set the current/runtime IP:
@@ -58,20 +97,6 @@ Set both EEPROM/default and current/runtime IP addresses:
   --set-eeprom-ip 192.168.2.170 \
   --set-current-ip 192.168.2.170
 ```
-
-To **clear only**, without programming a file:
-
-```bash
-./bin/mpc-mpcx-ip-writer 192.168.10.10 --clear
-```
-
-This erases license and saved settings in EEPROM `0xFFFFFC00..0xFFFFFC7F`
-(128 bytes) to `FF`, restores write protection, and verifies every erased byte.
-It displays compact before/after MAC/IP values and a success message in five nonempty lines plus a blank separator. It does not program
-an MPC/MPCX file, initialize from RAM, or change runtime/IP registers. Do not
-combine `--clear` with a file, `--set-eeprom-ip`, or `--set-current-ip`.
-`--port` and `--timeout` are supported. Clearing is off by default. Reprogram
-an appropriate license before returning the device to normal boot mode.
 
 Default RBCP UDP port is `4660`; default timeout is `3` seconds. These defaults are also shown by `--help`.
 
@@ -94,7 +119,17 @@ after (two lines), then a blank line and
 Use one space after `before:` and two after `after:` to align the fields. IPs retain hexadecimal
 notation. Success is printed only after all requested operations and verification complete. Use the reader for full register dumps. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
 
-## MPCX writing after clearing EEPROM
+### EEPROM clearing details
+
+This erases license and saved settings in EEPROM `0xFFFFFC00..0xFFFFFC7F`
+(128 bytes) to `FF`, restores write protection, and verifies every erased byte.
+It displays compact before/after MAC/IP values and a success message in five nonempty lines plus a blank separator. It does not program
+an MPC/MPCX file, initialize from RAM, or change runtime/IP registers. Do not
+combine `--clear` with a file, `--set-eeprom-ip`, or `--set-current-ip`.
+`--port` and `--timeout` are supported. Clearing is off by default. Reprogram
+an appropriate license before returning the device to normal boot mode.
+
+### MPCX writing after clearing EEPROM
 
 `mpc-mpcx-ip-writer` automatically checks EEPROM `0xFFFFFC10` bit7 for
 SiTCP-XG. When this bit is set (including `FF` after `clear`), it reads the
@@ -138,11 +173,7 @@ Consequently this implementation does not substitute normal-SiTCP defaults
 into SiTCP-XG. Normal MPC programming is unchanged. Optional official extension
 copying beyond `FC4F` is not implemented; `FC50..FC7F` remain unchanged.
 
-## How to use the reader
-
-```bash
-./bin/mpc-mpcx-ip-reader 192.168.2.161
-```
+### Reader report details
 
 The reader always reports:
 
@@ -192,22 +223,7 @@ MAC/IP snapshots and retain mandatory write/read-back verification.
 
 The reader determines the device generation first from the documented SiTCP-XG Identifier register at `0xFFFFFF08..0xFFFFFF0B`. An exact value of `0x58544350` identifies SiTCP-XG. MPC/MPCX payload classification is handled separately and is not used to determine the device generation.
 
-## How to use the IP-only commands
-
-Use these when only SiTCP / SiTCP-XG IP configuration is needed and no MPC/MPCX file should be involved:
-
-```bash
-./bin/sitcp-sitcpxg-ip-reader 192.168.2.161
-./bin/sitcp-sitcpxg-ip-writer 192.168.2.161 192.168.2.170
-```
-
-The IP-only commands share the low-level IP register helper but do not read or rewrite MPC/MPCX payload data.
-
-## How to use the advanced command
-
-```bash
-./bin/mpc-mpcx-ip-command --help
-```
+### Advanced command reference
 
 Important subcommands include (MPC_OR_MPCX_FILE means a `.mpc` or `.mpcx` license/configuration file):
 
@@ -227,7 +243,7 @@ ip-write CURRENT_IP NEW_IP [--eeprom|--current] [--port N] [--timeout SEC]
 
 `read` and `ip-read` display the same full runtime/EEPROM report. `ip-write` and the standalone IP writer print five-nonempty-line before/after MAC/IP and result summaries. The standalone IP reader retains its compact MAC/IP view. `ip-write` defaults to EEPROM and accepts `--current` for the runtime/current address.
 
-## Build requirements
+### Build requirements
 
 - C++11 compiler (`g++` or `clang++`)
 - POSIX sockets
@@ -235,7 +251,7 @@ ip-write CURRENT_IP NEW_IP [--eeprom|--current] [--port N] [--timeout SEC]
 
 The default build uses `-std=c++11`. Targets are Linux, macOS, and WSL.
 
-## Installation options and updates
+### Installation options and updates
 
 Run build and installation commands from the repository root. The default `PREFIX` is
 `$(CURDIR)`, and `BINDIR` defaults to `$(PREFIX)/bin`.
@@ -276,11 +292,11 @@ With a custom prefix, replace `./bin/` in the examples with your
 chosen `PREFIX/bin/`. For a system installation, use
 `sudo make install PREFIX=/usr/local` (administrator privileges required).
 
-## Source formatting
+### Source formatting
 
 Source files should use conventional readable C++ formatting. Avoid compressed one-line implementations; put control-flow blocks and logically separate statements on separate lines. Long expressions should be wrapped rather than packed into a single line.
 
-## Implementation notes
+### Implementation notes
 
 The public commands use shared transport/network/MPC-MPCX code in `src/sitcp-sitcpxg-rbcp.hpp`, `src/sitcp-sitcpxg-network-config.hpp`, and `src/sitcp-sitcpxg-mpc-mpcx.hpp`. MPC/MPCX payload handling and IP register handling remain logically separated internally even though some commands expose both functions.
 
@@ -297,7 +313,7 @@ EEPROM WE   : 0xFFFFFCFF
 This is an experimental implementation and is not an official Bee Beans Technologies utility. Proprietary executables, libraries, and user-specific MPC/MPCX files are not included.
 
 
-## Documentation
+### Documentation
 
 - [For developers](FOR_DEVELOPERS.md) — architecture, build/development notes, technical evidence, MPC/MPCX EEPROM mappings, device-generation detection, references, and testing.
 - [Agent instructions](AGENTS.md) — constraints for automated development.
