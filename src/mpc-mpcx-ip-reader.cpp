@@ -15,7 +15,7 @@ namespace {
 void unified_usage(const char* program) {
     std::cerr
         << "Usage: " << program << " IP [options]\n\n"
-        << "Reads all 80 runtime and EEPROM bytes separately, including\n"
+        << "Reads runtime (SiTCP: 64 / XG: 80 bytes) and EEPROM (80 bytes), including\n"
         << "current/EEPROM MAC/IP and decimal/hex register values.\n\n"
         << "Options:\n"
         << "  --port N       RBCP UDP port (default: "

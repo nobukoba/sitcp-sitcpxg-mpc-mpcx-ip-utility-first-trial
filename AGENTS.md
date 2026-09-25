@@ -127,8 +127,13 @@ Keep these documents synchronized with implementation changes:
 
 ## Diagnostic report consistency
 
-- Keep the full 80-byte runtime (`0xFFFFFF00..0xFFFFFF4F`) and EEPROM
-  (`0xFFFFFC00..0xFFFFFC4F`) reports in separate clearly labeled sections.
+- Select diagnostic runtime length by the exact XG identifier, not file suffix
+  or EEPROM payload: normal SiTCP reads FF00..FF3F (64 bytes), XG reads
+  FF00..FF4F (80 bytes). Never request FF40..FF4F for normal SiTCP reports.
+- EEPROM stays FC00..FC4F (80 bytes) for both generations; normal MPC needs
+  its FC40..FC4F license data. Keep the two regions separately labeled with
+  the actual range/length; COMPLETE means all bytes in those selected ranges.
+- If generation detection times out, fail before reading a guessed range.
 - Share report logic across the MPC/MPCX reader, advanced read/ip-read, and
   MPC/MPCX and advanced IP writer before/after views.
 - Display decoded numeric register values in decimal and hexadecimal together;

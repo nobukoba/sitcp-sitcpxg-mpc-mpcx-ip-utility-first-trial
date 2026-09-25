@@ -12,6 +12,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 class Device:
     def __init__(self, xg=True, rate=10000, fault=None):
+        self.xg = xg
         self.memory = {}
         self.requests = []
         self.fault = fault
@@ -46,6 +47,10 @@ class Device:
                 self.put(address, packet[8:])
             data = bytes(self.memory.get(address + i, 0) for i in range(length))
             status = command | 8
+            if not self.xg and address < 0xFFFFFF50 and address + length > 0xFFFFFF40:
+                status |= 1
+            if self.fault == 'identifier_timeout' and address == 0xFFFFFF08:
+                continue
             if command == 0x80 and address == 0xFFFFFC20:
                 if self.fault == 'write_bus':
                     status |= 1
@@ -85,7 +90,8 @@ class ReportTests(unittest.TestCase):
         self.assertIn('current IP          : 127.0.0.1', runtime)
         self.assertIn('EEPROM IP           : 192.0.2.10', eeprom)
         for base in (0xFFFFFF00, 0xFFFFFC00):
-            for offset in range(0, 80, 16):
+            length = 64 if base == 0xFFFFFF00 and not device.xg else 80
+            for offset in range(0, length, 16):
                 expected = ' '.join(f'{device.memory[base + offset + i]:02X}' for i in range(16))
                 self.assertIn(f'{base + offset:08X}: {expected}', output)
 
@@ -108,10 +114,28 @@ class ReportTests(unittest.TestCase):
                             self.assertIn('10795 (0x2A2B)', result.stdout)
                         else:
                             self.assertNotIn('transmission rate', result.stdout)
+                            self.assertIn('0xFFFFFF00..0xFFFFFF3F, 64 bytes', result.stdout)
+                            self.assertNotIn('FFFFFF40:', result.stdout)
+                            self.assertNotIn('WARNING', result.stderr)
+                            self.assertIn('COMPLETE', result.stdout)
+                            self.assertFalse(any(
+                                address < 0xFFFFFF50 and address + length > 0xFFFFFF40
+                                for _, address, length in device.requests))
                         self.assertTrue(all(req[0] == 0xC0 for req in device.requests))
                         self.assertFalse(any(req[1] == 0xFFFFFF50 for req in device.requests))
                     finally:
                         device.close()
+
+    def test_unknown_generation_does_not_guess_range(self):
+        device = Device(fault='identifier_timeout')
+        try:
+            result = device.run('mpc-mpcx-ip-reader', '127.0.0.1')
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('cannot select runtime read range', result.stderr)
+            self.assertTrue(all(address == 0xFFFFFF08
+                                for _, address, _ in device.requests))
+        finally:
+            device.close()
 
     def test_invalid_rate(self):
         device = Device(rate=65535)
@@ -191,7 +215,13 @@ class ReportTests(unittest.TestCase):
                     payload.write_bytes(bytes([0x2C] * 7 + [0] * 15) if xg else bytes(22))
                     result = device.run('mpc-mpcx-ip-writer', '127.0.0.1', str(payload))
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout.count('raw runtime FF00..FF4F:'), 2)
+                self.assertEqual(result.stdout.count(
+                    'raw runtime FF00..FF4F:' if xg else 'raw runtime FF00..FF3F:'), 2)
+                if not xg:
+                    self.assertNotIn('WARNING', result.stderr)
+                    self.assertFalse(any(
+                        address < 0xFFFFFF50 and address + length > 0xFFFFFF40
+                        for _, address, length in device.requests))
                 self.assertEqual(result.stdout.count('raw EEPROM FC00..FC4F:'), 2)
                 self.assertEqual(device.memory[0xFFFFFCFF], 255)
                 self.assertIn('WRITE/VERIFY OK', result.stdout)

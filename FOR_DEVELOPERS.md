@@ -343,9 +343,11 @@ For verified payload layouts, the embedded MAC address is `payload[0:6]` for nor
 
 `src/sitcp-sitcpxg-register-report.hpp` supplies the common report used by the
 MPC/MPCX reader, advanced `read` / `ip-read`, and before/after views of the
-MPC/MPCX writer and advanced `ip-write`. It reads runtime FF00..FF4F and EEPROM
-FC00..FC4F independently in 8-byte RBCP chunks, then prints separate 80-byte
-hex dumps. MAC/IP values come directly from their region's registers, never
+MPC/MPCX writer and advanced `ip-write`. It reads runtime FF00..FF3F (64 bytes) for normal SiTCP or FF00..FF4F
+(80 bytes) for SiTCP-XG, plus EEPROM FC00..FC4F (80 bytes) for both. Reads use
+8-byte RBCP chunks and separate hex dumps. Identifier timeout aborts range
+selection. The display, completion check, and writer before/after views use
+the selected runtime length. MAC/IP values come directly from their region's registers, never
 from reconstructed payloads. Generation detection still uses only FF08..FF0B.
 The XG parameter decoder is shared by the two regions. Numeric register values
 are decimal plus uppercase zero-padded hex; converted timeout units remain
@@ -355,8 +357,8 @@ Normal SiTCP retains raw dumps without applying the XG parameter map.
 A diagnostic block bus error triggers byte-by-byte reads of that block. Each
 rejected byte is marked unreadable and printed as `??`, with its address on
 stderr. Only complete fields/payloads are decoded. This supports maps with
-reserved holes, including runtime FF40..FF4F, without suppressing other bytes
-or EEPROM output. All requests remain within the 80-byte window. Short replies
+unreadable bytes within the selected range without suppressing other bytes
+or EEPROM output. Normal SiTCP runtime FF40..FF4F is not requested. Short replies
 and timeouts remain fatal and include the request address.
 
 Read views return 3 for PARTIAL, 0 for COMPLETE, or 1 for fatal errors. Writer
@@ -431,3 +433,19 @@ FC40), preservation without initialization, bit7 selection, missing RAM,
 RESET-bit rejection, type mismatch, explicit IP override order, failed/lost
 write ACKs, lost enable ACK, and read-back mismatch. These are not real-hardware
 verification or proof of complete equivalence to all official-tool versions.
+
+## Generation-specific diagnostic range
+
+The [SiTCP Internal Register Manual 1.0.2, table 3-1 (printed p.2)](https://www.bbtech.co.jp/download-files/sitcp/SiTCP_Register_Manual_1.0.2.pdf#page=5)
+labels runtime +0x40..+0xFF as Access prohibited area. It does not guarantee
+that reads always return bus errors. User-provided hardware output showed
+normal SiTCP returning bus errors for FF40..FF4F while reading EEPROM
+FC40..FC4F successfully; XG returned all 80 runtime bytes. The report now
+selects 64 versus 80 bytes from device generation before reading. Both retain
+80 EEPROM bytes, including the normal MPC license tail. Explicit low-level
+`rbcp-read` and `probe` retain their caller-specified ranges. MPCX initialization
+still requires its complete 80-byte runtime image; programming maps are unchanged.
+
+Simulator tests reject the entire normal-SiTCP runtime tail and verify that
+reader/advanced read/ip-read and writer diagnostics never request those bytes,
+retain EEPROM FC40..FC4F, and report COMPLETE without expected-tail warnings.

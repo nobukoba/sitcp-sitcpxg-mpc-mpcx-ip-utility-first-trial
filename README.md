@@ -55,12 +55,14 @@ EEPROM IP
 ```
 
 in separate Runtime and EEPROM sections, followed by MPC/MPCX information
-reconstructed from EEPROM. Both sections include all 80 (`0x50`) bytes:
+reconstructed from EEPROM. The runtime length follows the detected device generation:
 
-- Runtime: `0xFFFFFF00..0xFFFFFF4F`
-- EEPROM: `0xFFFFFC00..0xFFFFFC4F`
+- Normal SiTCP runtime: `0xFFFFFF00..0xFFFFFF3F` (64 bytes)
+- SiTCP-XG runtime: `0xFFFFFF00..0xFFFFFF4F` (80 bytes)
+- EEPROM (both generations): `0xFFFFFC00..0xFFFFFC4F` (80 bytes)
 
-Each raw dump has five rows of 16 hexadecimal bytes. SiTCP-XG parameters are
+Raw dumps use 16 hexadecimal bytes per row: four runtime rows for normal SiTCP,
+five for XG, and five EEPROM rows for either generation. SiTCP-XG parameters are
 decoded separately from each region; numeric register values include decimal and
 hexadecimal forms, for example `10000 (0x2710) Mbps` or `4660 (0x1234)`.
 Timeout conversions retain their units alongside the decimal/hex raw value.
@@ -73,9 +75,11 @@ The same report is available with:
 ./bin/mpc-mpcx-ip-command read 192.168.2.161
 ```
 
-The full report requests all 80 bytes, including the runtime tail at
-`0xFFFFFF40..0xFFFFFF4F`. Some SiTCP versions reserve this region or reject
-access. On a block bus error, the diagnostic report reads that block byte by
+Normal SiTCP reports do not request runtime `0xFFFFFF40..0xFFFFFF4F`, which
+the SiTCP register manual lists as access-prohibited. Its EEPROM `FC40..FC4F`
+remains readable and is required for MPC payload reconstruction. XG reports
+include runtime `FF40..FF4F`. If generation detection times out, the report
+fails before selecting a read range. On a block bus error, the diagnostic report reads that block byte by
 byte, displays readable values, and marks rejected bytes as `??`. Warnings
 identify each rejected address. Fields with missing bytes are `unavailable`;
 they are never decoded using placeholder zeros. Runtime and EEPROM remain
@@ -137,7 +141,7 @@ Writer options:
 
 When both IP options are given, EEPROM IP is written first and current/runtime IP is changed last. This keeps the original address reachable until all operations that require it have finished. After a current/runtime IP change, the writer reconnects to the new IP and performs read-back verification. It does not blindly retry a timed-out destructive current-IP write because the address may already have changed before the acknowledgement is received.
 
-The writer displays the separate full 80-byte runtime and EEPROM reports, including current/EEPROM MAC and IP values, before and after the operation. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
+The writer displays the separate runtime (SiTCP: 64 / XG: 80 bytes) and EEPROM (80 bytes) reports, including current/EEPROM MAC and IP values, before and after the operation. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
 
 ## MPCX writing after clearing EEPROM
 

@@ -27,7 +27,7 @@ void unified_usage(const char* program) {
         << "  ip-write CURRENT_IP NEW_IP [--eeprom|--current]"
            " [--port N] [--timeout SEC]\n"
         << "  write ...  Use mpc-mpcx-ip-writer\n\n"
-        << "read/ip-read show separate 80-byte runtime and EEPROM reports.\n"
+        << "read/ip-read: runtime SiTCP 64 / XG 80 bytes; EEPROM 80 bytes.\n"
         << "Register values are shown in decimal and hexadecimal.\n\n"
         << "Defaults:\n"
         << "  --port N       RBCP UDP port (default: "

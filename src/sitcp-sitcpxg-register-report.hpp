@@ -43,18 +43,20 @@ inline std::string address_string(uint32_t address) {
     return output.str();
 }
 
-inline RegisterImage read_image(rbcp::Client& client, uint32_t base) {
-    RegisterImage image(80);
+inline RegisterImage read_image(rbcp::Client& client, uint32_t base,
+                                size_t length) {
+    RegisterImage image(length);
     for (size_t offset = 0; offset < image.bytes.size(); offset += 8) {
+        const size_t chunk_size = std::min<size_t>(8, image.bytes.size() - offset);
         try {
             const std::vector<uint8_t> block = rbcp::read_retry(
-                client, base + static_cast<uint32_t>(offset), 8);
+                client, base + static_cast<uint32_t>(offset), chunk_size);
             std::copy(block.begin(), block.end(), image.bytes.begin() + offset);
             std::fill(image.readable.begin() + offset,
-                      image.readable.begin() + offset + 8, true);
+                      image.readable.begin() + offset + chunk_size, true);
         } catch (const rbcp::BusError&) {
             // A block may cross a reserved byte. Recover each readable byte.
-            for (size_t i = offset; i < offset + 8; ++i) {
+            for (size_t i = offset; i < offset + chunk_size; ++i) {
                 const uint32_t address = base + static_cast<uint32_t>(i);
                 try {
                     image.bytes[i] = rbcp::read_retry(client, address, 1).at(0);
@@ -236,7 +238,7 @@ inline void dump(uint32_t base, const RegisterImage& image) {
         std::ostringstream line;
         line << std::hex << std::uppercase << std::setfill('0')
              << std::setw(8) << (base + offset) << ":";
-        for (size_t i = offset; i < offset + 16; ++i) {
+        for (size_t i = offset; i < std::min(offset + 16, image.bytes.size()); ++i) {
             line << ' ';
             if (image.readable[i]) {
                 line << std::setw(2) << static_cast<unsigned>(image.bytes[i]);
@@ -252,19 +254,26 @@ inline bool show(const std::string& host, uint16_t port, double timeout) {
     rbcp::Client client(host, port, timeout);
     std::string detection;
     const int target_type = detect_target(client, detection);
-    const RegisterImage runtime = read_image(client, 0xFFFFFF00u);
-    const RegisterImage eeprom = read_image(client, EEPROM_BASE);
+    if (target_type != 1 && target_type != 2) {
+        throw rbcp::Error("cannot select runtime read range: " + detection);
+    }
+    const size_t runtime_length = target_type == 1 ? 0x50 : 0x40;
+    const RegisterImage runtime = read_image(client, 0xFFFFFF00u, runtime_length);
+    const RegisterImage eeprom = read_image(client, EEPROM_BASE, 0x50);
 
     field("target", host + ":" + std::to_string(port));
     field("detected type", type_name(target_type));
     field("detection", detection);
-    std::cout << "\nRuntime registers (0xFFFFFF00..0xFFFFFF4F, 80 bytes):\n";
+    std::cout << "\nRuntime registers (0xFFFFFF00.."
+              << address_string(0xFFFFFF00u + static_cast<uint32_t>(runtime_length) - 1)
+              << ", " << std::to_string(runtime_length) << " bytes):\n";
     field("current MAC", mac_value(runtime, 0x12));
     field("current IP", ip_value(runtime, 0x18));
     if (target_type == 1) {
         show_xg_parameters(runtime);
     }
-    std::cout << "raw runtime FF00..FF4F:\n";
+    std::cout << (target_type == 1 ? "raw runtime FF00..FF4F:\n"
+                                  : "raw runtime FF00..FF3F:\n");
     dump(0xFFFFFF00u, runtime);
 
     std::cout << "\nEEPROM (0xFFFFFC00..0xFFFFFC4F, 80 bytes):\n";
@@ -296,7 +305,7 @@ inline bool show(const std::string& host, uint16_t port, double timeout) {
         field("MPC FC40..FC4F", eeprom.has(0x40, 16)
               ? hex_bytes(eeprom.bytes, 0x40, 0x50) : "unavailable");
     }
-    const bool complete = runtime.has(0, 80) && eeprom.has(0, 80);
+    const bool complete = runtime.has(0, runtime_length) && eeprom.has(0, 80);
     field("register report", complete ? "COMPLETE" : "PARTIAL (?? = unreadable)");
     return complete;
 }
