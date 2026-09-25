@@ -266,8 +266,6 @@ No administrator privileges are needed for the default installation.
 For development without installation, replace that prefix with `./src/`.
 Both directories contain the same five commands after a successful installation.
 Running `make` alone does not refresh an existing installed copy.
-Older versions installed into `./install/bin/`; those copies are no longer
-updated by the default installation. Use `./bin/` after running `make install`.
 `make clean` removes generated executables from `src/` while retaining source
 files and installed binaries.
 
