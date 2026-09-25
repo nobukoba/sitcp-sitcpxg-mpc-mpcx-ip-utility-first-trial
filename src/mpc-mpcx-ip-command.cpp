@@ -147,9 +147,7 @@ int main(int argc, char** argv) {
             }
 
             network_config::show_compact(final_host, port, timeout, "after");
-            std::cout << "WRITE/VERIFY OK: "
-                      << (write_current ? "current/runtime IP (reconnected)" : "EEPROM IP")
-                      << '\n';
+            network_config::print_success();
             return 0;
         }
 

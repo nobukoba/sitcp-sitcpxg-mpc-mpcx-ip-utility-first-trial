@@ -97,6 +97,10 @@ inline void print_snapshot(const Snapshot& snapshot,
         << prefix << "EEPROM IP    : " << ipv4_string(snapshot.eeprom_ip) << '\n';
 }
 
+inline void print_success() {
+    std::cout << "\nSuccess! All operations completed and verified.\n";
+}
+
 inline void show_compact(const std::string& host, uint16_t port,
                          double timeout, const std::string& phase) {
     Client client(host, port, timeout);

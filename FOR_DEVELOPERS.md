@@ -364,8 +364,8 @@ or EEPROM output. Normal SiTCP runtime FF40..FF4F is not requested. Short replie
 and timeouts remain fatal and include the request address.
 
 Read views return 3 for PARTIAL, 0 for COMPLETE, or 1 for fatal errors. Writers
-use shared compact network snapshots (two lines before, two after, one final
-result) instead of full diagnostic reads. They retain mandatory
+use shared compact network snapshots (two lines before, two after, a blank separator, then
+`Success! All operations completed and verified.`) instead of full diagnostic reads. They retain mandatory
 programming/read-back verification and write-protection handling. Required
 MPCX initialization still reads the complete runtime image. No writes to the
 runtime tail are introduced.
@@ -460,13 +460,13 @@ retain EEPROM FC40..FC4F, and report COMPLETE without expected-tail warnings.
 standalone erase operation (default off), not clear-before-programming.
 It requires no license file and rejects file/IP-change combinations before
 network access. No RAM restoration or subsequent file programming is performed.
-The writer displays compact before/after MAC/IP snapshots and the result in five lines.
+The writer displays compact before/after MAC/IP snapshots and the success message in five nonempty lines plus a blank separator.
 
 Both writer `--clear` and advanced `clear IP --yes-really-clear` call the shared
 `src/sitcp-sitcpxg-eeprom-clear.hpp` helper. It enables EEPROM writes, writes FF
 to FC00..FC7F in 16-byte blocks, restores protection, then verifies all 128
 bytes in 8-byte reads. An enable/write failure triggers a protection attempt;
-no destructive data write is retried. Verification failure is not CLEAR OK.
+no destructive data write is retried. Verification failure must never print the success message.
 The advanced command retains its existing guard; writer `--clear` itself is
 the explicit clear-only selector. The operation does not write runtime space.
 

@@ -201,8 +201,8 @@ class ReportTests(unittest.TestCase):
             result = device.run('mpc-mpcx-ip-command', 'ip-write', '127.0.0.1', '192.0.2.20')
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertNotIn('PARTIAL', result.stdout)
-            self.assertEqual(len(result.stdout.splitlines()), 5)
-            self.assertIn('WRITE/VERIFY OK', result.stdout)
+            self.assertEqual(len(result.stdout.splitlines()), 6)
+            self.assertIn('Success!', result.stdout)
             self.assertEqual(device.memory[0xFFFFFCFF], 255)
         finally:
             device.close()
@@ -216,7 +216,7 @@ class ReportTests(unittest.TestCase):
                     payload.write_bytes(bytes([0x2C] * 7 + [0] * 15) if xg else bytes(22))
                     result = device.run('mpc-mpcx-ip-writer', '127.0.0.1', str(payload))
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(len(result.stdout.splitlines()), 5)
+                self.assertEqual(len(result.stdout.splitlines()), 6)
                 self.assertNotIn('raw runtime', result.stdout)
                 self.assertIn('before: runtime MAC', result.stdout)
                 self.assertIn('after: EEPROM  MAC', result.stdout)
@@ -227,7 +227,7 @@ class ReportTests(unittest.TestCase):
                         for _, address, length in device.requests))
                 self.assertNotIn('raw EEPROM', result.stdout)
                 self.assertEqual(device.memory[0xFFFFFCFF], 255)
-                self.assertIn('WRITE/VERIFY OK', result.stdout)
+                self.assertIn('Success!', result.stdout)
             finally:
                 device.close()
 
@@ -240,10 +240,10 @@ class ReportTests(unittest.TestCase):
                     args.append('--current')
                 result = device.run('sitcp-sitcpxg-ip-writer', *args)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(len(result.stdout.splitlines()), 5)
+                self.assertEqual(len(result.stdout.splitlines()), 6)
                 self.assertIn('before: runtime MAC', result.stdout)
                 self.assertIn('after: EEPROM  MAC', result.stdout)
-                self.assertIn('WRITE/VERIFY OK', result.stdout)
+                self.assertIn('Success!', result.stdout)
                 self.assertIn('(0x7F000001)', result.stdout)
             finally:
                 device.close()
@@ -253,7 +253,7 @@ class ReportTests(unittest.TestCase):
         try:
             result = device.run('mpc-mpcx-ip-command', 'ip-write', '127.0.0.1', '192.0.2.20')
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(len(result.stdout.splitlines()), 5)
+            self.assertEqual(len(result.stdout.splitlines()), 6)
             self.assertNotIn('raw runtime', result.stdout)
             self.assertIn('192.0.2.20', result.stdout.split('after:', 1)[1])
             self.assertEqual(device.memory[0xFFFFFCFF], 255)

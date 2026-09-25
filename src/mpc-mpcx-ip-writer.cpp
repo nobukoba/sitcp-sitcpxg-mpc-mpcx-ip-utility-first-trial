@@ -112,12 +112,6 @@ int classify_payload(const std::vector<uint8_t>& data) {
     return 0;
 }
 
-std::string type_name(int t) {
-    return t == 1 ? "MPCX (SiTCP-XG)" :
-           t == 2 ? "MPC (normal SiTCP)" :
-           t == -1 ? "ambiguous" : "unknown";
-}
-
 int detect_target(RbcpClient& c, std::string& why) {
     try {
         const auto identifier = rbcp::read_retry(c, XG_IDENTIFIER, 4);
@@ -209,7 +203,7 @@ void usage(const char* argv0) {
 }
 }
 
-inline int run_mpc_mpcx_writer(int argc, char** argv, std::string& summary) {
+inline int run_mpc_mpcx_writer(int argc, char** argv) {
     try {
         if (argc == 2 && (std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help")) {
             usage(argv[0]);
@@ -269,10 +263,6 @@ inline int run_mpc_mpcx_writer(int argc, char** argv, std::string& summary) {
         }
 
         program(client, payload, file_type, eeprom);
-        summary = type_name(file_type) + "; " +
-            ((file_type == 1 && (eeprom[0x10] & 0x80) != 0)
-             ? "EEPROM initialization: current RAM"
-             : "existing EEPROM settings preserved");
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "ERROR: " << e.what() << "\n";
@@ -377,8 +367,7 @@ int main(int argc, char** argv) {
             rbcp::Client client(host, port, timeout);
             sitcp_sitcpxg::eeprom_clear::clear_and_verify(client);
             sitcp_sitcpxg::network_config::show_compact(host, port, timeout, "after");
-            std::cout << "CLEAR OK: " << host << ':' << port
-                      << "; EEPROM FC00..FC7F = FF (128 bytes verified); protected\n";
+            sitcp_sitcpxg::network_config::print_success();
             return 0;
         }
 
@@ -397,9 +386,8 @@ int main(int argc, char** argv) {
             writer_argv.push_back(&(*it)[0]);
         }
 
-        std::string summary;
         const int writer_result = run_mpc_mpcx_writer(
-            static_cast<int>(writer_argv.size()), &writer_argv[0], summary);
+            static_cast<int>(writer_argv.size()), &writer_argv[0]);
         if (writer_result != 0) {
             return writer_result;
         }
@@ -415,8 +403,7 @@ int main(int argc, char** argv) {
         }
 
         sitcp_sitcpxg::network_config::show_compact(final_host, port, timeout, "after");
-        std::cout << "WRITE/VERIFY OK: " << final_host << ':' << port
-                  << "; " << summary << "; protected\n";
+        sitcp_sitcpxg::network_config::print_success();
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "ERROR: " << error.what() << '\n';
