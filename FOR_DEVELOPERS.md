@@ -18,17 +18,17 @@ make install
 
 The default build uses `-std=c++11`. Do not introduce C++14/17/20-only features without explicitly raising the minimum requirement. In particular, avoid `std::optional`, `std::string_view`, `std::filesystem`, structured bindings, `if constexpr`, and assumptions that `std::string::data()` is writable.
 
-The build produces `./bin/`; developers can run those binaries directly.
+The build produces `./src/`; developers can run those binaries directly.
 `make install` depends on the build and copies the five programs into
 `$(BINDIR)`, defaulting to `$(PREFIX)/bin`, with
-`PREFIX=$(CURDIR)/install`. After source updates, run `make install` to
-refresh installed copies; `make` alone only updates `./bin/`.
+`PREFIX=$(CURDIR)`. After source updates, run `make install` to
+refresh installed copies; `make` alone only updates `./src/`.
 README usage examples consistently use the installed copy.
 
 Default installation is local to the checkout:
 
 ```text
-./install/bin/
+./bin/
 ```
 
 Override with, for example:

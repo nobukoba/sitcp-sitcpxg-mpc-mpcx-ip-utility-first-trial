@@ -80,7 +80,7 @@ class Device:
 
     def run(self, program, *args):
         return subprocess.run(
-            [str(ROOT / 'bin' / program), *args, '--port', str(self.port), '--timeout', '0.1'],
+            [str(ROOT / 'src' / program), *args, '--port', str(self.port), '--timeout', '0.1'],
             text=True, capture_output=True, timeout=10)
 
 

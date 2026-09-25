@@ -101,12 +101,14 @@ Do not guess additional destructive register mappings.
 
 ## Installation
 
-Default `PREFIX` is `$(CURDIR)/install`, not `/usr/local`. `make install` must work without root privileges and install all five public commands. System installation remains available with `PREFIX=/usr/local`.
+Default `PREFIX` is `$(CURDIR)`, not `/usr/local`. `make install` must work without root privileges and install all five public commands. System installation remains available with `PREFIX=/usr/local`.
 
 README usage examples must consistently use the default installed path
-`./install/bin/`. Explain `./bin/` separately as build output for development.
+`./bin/`. Explain `./src/` separately as build output for development.
 Document that `make` alone does not refresh installed copies and that
 `make install` rebuilds and copies them after source updates.
+`make clean` removes only the five generated executables in `src/`; it must
+never remove the source directory or installed binaries.
 
 ## Safety
 
