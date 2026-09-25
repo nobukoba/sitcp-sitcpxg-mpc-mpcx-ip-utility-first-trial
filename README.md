@@ -54,7 +54,30 @@ EEPROM MAC
 EEPROM IP
 ```
 
-and then reads/decodes the MPC/MPCX EEPROM information.
+in separate Runtime and EEPROM sections, followed by MPC/MPCX information
+reconstructed from EEPROM. Both sections include all 80 (`0x50`) bytes:
+
+- Runtime: `0xFFFFFF00..0xFFFFFF4F`
+- EEPROM: `0xFFFFFC00..0xFFFFFC4F`
+
+Each raw dump has five rows of 16 hexadecimal bytes. SiTCP-XG parameters are
+decoded separately from each region; numeric register values include decimal and
+hexadecimal forms, for example `10000 (0x2710) Mbps` or `4660 (0x1234)`.
+Timeout conversions retain their units alongside the decimal/hex raw value.
+IP and MAC addresses retain their usual dotted-decimal/colon-hex notation.
+Normal SiTCP does not interpret its license bytes as XG transmission rates.
+
+The same report is available with:
+
+```bash
+./bin/mpc-mpcx-ip-command read 192.168.2.161
+```
+
+The full report requests all 80 bytes, including the runtime tail at
+`0xFFFFFF40..0xFFFFFF4F`. Some SiTCP versions reserve this region or reject
+access; a bus error or incomplete read is reported as an error, not a complete
+successful dump. Use the low-level `rbcp-read` command for a device-specific
+shorter range when necessary.
 
 The reader determines the device generation first from the documented SiTCP-XG Identifier register at `0xFFFFFF08..0xFFFFFF0B`. An exact value of `0x58544350` identifies SiTCP-XG. MPC/MPCX payload classification is handled separately and is not used to determine the device generation.
 
@@ -106,7 +129,7 @@ Writer options:
 
 When both IP options are given, EEPROM IP is written first and current/runtime IP is changed last. This keeps the original address reachable until all operations that require it have finished. After a current/runtime IP change, the writer reconnects to the new IP and performs read-back verification. It does not blindly retry a timed-out destructive current-IP write because the address may already have changed before the acknowledgement is received.
 
-The writer displays current/EEPROM MAC and IP values before and after the operation. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
+The writer displays the separate full 80-byte runtime and EEPROM reports, including current/EEPROM MAC and IP values, before and after the operation. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
 
 ## IP-only commands
 
@@ -141,7 +164,7 @@ ip-read IP [--port N] [--timeout SEC]
 ip-write CURRENT_IP NEW_IP [--eeprom|--current] [--port N] [--timeout SEC]
 ```
 
-`read` also displays current/EEPROM MAC and IP information. `ip-read` provides only the network configuration view. `ip-write` defaults to EEPROM and accepts `--current` for the runtime/current address.
+`read` and `ip-read` display the same full runtime/EEPROM report. `ip-write` displays that report before and after the operation. The standalone IP-only commands retain their compact MAC/IP view. `ip-write` defaults to EEPROM and accepts `--current` for the runtime/current address.
 
 ## Build requirements
 

@@ -1,4 +1,4 @@
-#include "sitcp-sitcpxg-network-config.hpp"
+#include "sitcp-sitcpxg-register-report.hpp"
 #include "sitcp-sitcpxg-mpc-mpcx.hpp"
 
 #include <cstdint>
@@ -27,6 +27,8 @@ void unified_usage(const char* program) {
         << "  ip-write CURRENT_IP NEW_IP [--eeprom|--current]"
            " [--port N] [--timeout SEC]\n"
         << "  write ...  Use mpc-mpcx-ip-writer\n\n"
+        << "read/ip-read show separate 80-byte runtime and EEPROM reports.\n"
+        << "Register values are shown in decimal and hexadecimal.\n\n"
         << "Defaults:\n"
         << "  --port N       RBCP UDP port (default: "
         << network_config::DEFAULT_PORT << ")\n"
@@ -77,7 +79,7 @@ int main(int argc, char** argv) {
             uint16_t port = network_config::DEFAULT_PORT;
             double timeout = network_config::DEFAULT_TIMEOUT;
             parse_common_options(argc, argv, 3, port, timeout);
-            network_config::show_all(argv[2], port, timeout);
+            sitcp_sitcpxg::register_report::show(argv[2], port, timeout);
             return 0;
         }
 
@@ -132,7 +134,7 @@ int main(int argc, char** argv) {
             }
 
             std::cout << "before:\n";
-            network_config::show_all(host, port, timeout, "  ");
+            sitcp_sitcpxg::register_report::show(host, port, timeout);
 
             std::string final_host = host;
             if (write_current) {
@@ -145,7 +147,7 @@ int main(int argc, char** argv) {
             }
 
             std::cout << "after:\n";
-            network_config::show_all(final_host, port, timeout, "  ");
+            sitcp_sitcpxg::register_report::show(final_host, port, timeout);
             std::cout << "status       : WRITE/VERIFY OK\n";
             return 0;
         }
@@ -159,9 +161,9 @@ int main(int argc, char** argv) {
             double timeout = network_config::DEFAULT_TIMEOUT;
             parse_common_options(argc, argv, 3, port, timeout);
 
-            std::cout << "network configuration:\n";
-            network_config::show_all(argv[2], port, timeout, "  ");
-            std::cout << "\nMPC/MPCX information:\n";
+            sitcp_sitcpxg::register_report::show(argv[2], port, timeout);
+            std::cout << "status               : READ OK\n";
+            return 0;
         }
 
         if (command == "write") {

@@ -332,3 +332,34 @@ mpc-mpcx-ip-command mac MPC_OR_MPCX_FILE
 ```
 
 For verified payload layouts, the embedded MAC address is `payload[0:6]` for normal SiTCP/MPC and `payload[16:22]` for SiTCP-XG/MPCX. `inspect` reports the detected payload type, embedded MAC, and payload; `mac` reports the detected type and embedded MAC.
+
+## Runtime / EEPROM diagnostic reports
+
+`src/sitcp-sitcpxg-register-report.hpp` supplies the common report used by the
+MPC/MPCX reader, advanced `read` / `ip-read`, and before/after views of the
+MPC/MPCX writer and advanced `ip-write`. It reads runtime FF00..FF4F and EEPROM
+FC00..FC4F independently in 8-byte RBCP chunks, then prints separate 80-byte
+hex dumps. MAC/IP values come directly from their region's registers, never
+from reconstructed payloads. Generation detection still uses only FF08..FF0B.
+The XG parameter decoder is shared by the two regions. Numeric register values
+are decimal plus uppercase zero-padded hex; converted timeout units remain
+visible. Out-of-range rates retain their raw value without claiming Mbps.
+Normal SiTCP retains raw dumps without applying the XG parameter map.
+
+The full report requires all 80 runtime bytes to be readable. A rejected or
+short read fails explicitly; no missing byte is silently zero-filled. In
+particular, older SiTCP maps may reserve FF40..FF4F. No writes to that tail are
+introduced. The existing EEPROM programming and protection path is unchanged.
+
+Validation:
+
+```bash
+make
+python3 tests/test_register_report.py
+```
+
+The tests use a local UDP RBCP simulator with synthetic data, checking all dump
+bytes and source separation, both generations, decimal/hex rate and timeout
+values, invalid rates, short reads, bus errors, read-only traffic, and both
+writer before/after views with EEPROM protection restored. They do not replace
+physical-device validation. Python is needed only for these tests, not the CLI.

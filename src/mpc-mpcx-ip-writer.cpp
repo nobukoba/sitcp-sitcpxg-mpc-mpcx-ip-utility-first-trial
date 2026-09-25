@@ -1,4 +1,4 @@
-#include "sitcp-sitcpxg-network-config.hpp"
+#include "sitcp-sitcpxg-register-report.hpp"
 #include "sitcp-sitcpxg-rbcp.hpp"
 
 #include <algorithm>
@@ -385,7 +385,7 @@ int main(int argc, char** argv) {
         }
 
         std::cout << "before:\n";
-        sitcp_sitcpxg::network_config::show_all(host, port, timeout, "  ");
+        sitcp_sitcpxg::register_report::show(host, port, timeout);
 
         std::vector<std::string> writer_args;
         writer_args.push_back(argv[0]);
@@ -421,7 +421,7 @@ int main(int argc, char** argv) {
         }
 
         std::cout << "after:\n";
-        sitcp_sitcpxg::network_config::show_all(final_host, port, timeout, "  ");
+        sitcp_sitcpxg::register_report::show(final_host, port, timeout);
         std::cout << "status       : WRITE/VERIFY OK\n";
         return 0;
     } catch (const std::exception& error) {

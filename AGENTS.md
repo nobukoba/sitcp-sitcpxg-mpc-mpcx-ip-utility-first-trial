@@ -124,3 +124,17 @@ Keep these documents synchronized with implementation changes:
 7. Keep the entire public build compatible with C++11.
 8. Refactor temporary wrapper/include structure into shared implementation modules when stable.
 9. Reformat compressed legacy C++ as it is touched and keep new code readable.
+
+## Diagnostic report consistency
+
+- Keep the full 80-byte runtime (`0xFFFFFF00..0xFFFFFF4F`) and EEPROM
+  (`0xFFFFFC00..0xFFFFFC4F`) reports in separate clearly labeled sections.
+- Share report logic across the MPC/MPCX reader, advanced read/ip-read, and
+  MPC/MPCX and advanced IP writer before/after views.
+- Display decoded numeric register values in decimal and hexadecimal together;
+  retain units and conventional IP/MAC notation. Raw byte dumps remain hex.
+- Decode each region from its own bytes. Only apply the XG parameter map after
+  exact identifier detection, never to normal SiTCP license bytes.
+- Incomplete or unsupported full-range reads must fail explicitly, not invent
+  bytes or report READ OK. Keep standalone IP-only commands compact.
+- Run `python3 tests/test_register_report.py` after changing diagnostic reports.
