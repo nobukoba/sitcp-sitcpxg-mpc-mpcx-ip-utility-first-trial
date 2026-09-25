@@ -21,28 +21,47 @@ make
 make install
 ```
 
-Default installation directory:
+Run these commands from the repository root. The default `PREFIX` is
+`$(CURDIR)/install`, and `BINDIR` defaults to `$(PREFIX)/bin`.
+No administrator privileges are needed for the default installation.
 
-```text
-./install/bin/
+| Command | Output location | How to run |
+| --- | --- | --- |
+| `make` | `./bin/` (build output) | `./bin/mpc-mpcx-ip-reader DEVICE_IP` |
+| `make install` | `./install/bin/` (installed copy) | `./install/bin/mpc-mpcx-ip-reader DEVICE_IP` |
+
+**All usage examples below use the installed copy in `./install/bin/`.**
+For development without installation, replace that prefix with `./bin/`.
+Both directories contain the same five commands after a successful installation.
+Running `make` alone does not refresh an existing installed copy.
+
+After updating the source, rebuild and refresh the installation:
+
+```bash
+git pull --ff-only
+make install
 ```
 
-Installed commands:
+`make install` builds any outdated binaries before copying them.
 
-```text
-./install/bin/mpc-mpcx-ip-writer
-./install/bin/mpc-mpcx-ip-reader
-./install/bin/mpc-mpcx-ip-command
-./install/bin/sitcp-sitcpxg-ip-writer
-./install/bin/sitcp-sitcpxg-ip-reader
+To choose another installation prefix:
+
+```bash
+make install PREFIX="$HOME/.local"
+"$HOME/.local/bin/mpc-mpcx-ip-reader" DEVICE_IP
 ```
+
+If `$HOME/.local/bin` is on your `PATH`, you can also run the command by name.
+With a custom prefix, replace `./install/bin/` in the examples with your
+chosen `PREFIX/bin/`. For a system installation, use
+`sudo make install PREFIX=/usr/local` (administrator privileges required).
 
 Default RBCP UDP port is `4660`; default timeout is `3` seconds. These defaults are also shown by `--help`.
 
 ## Reader
 
 ```bash
-./bin/mpc-mpcx-ip-reader 192.168.2.161
+./install/bin/mpc-mpcx-ip-reader 192.168.2.161
 ```
 
 The reader always reports:
@@ -74,7 +93,7 @@ Normal SiTCP does not interpret its license bytes as XG transmission rates.
 The same report is available with:
 
 ```bash
-./bin/mpc-mpcx-ip-command read 192.168.2.161
+./install/bin/mpc-mpcx-ip-command read 192.168.2.161
 ```
 
 Normal SiTCP reports do not request runtime `0xFFFFFF40..0xFFFFFF4F`, which
@@ -104,27 +123,27 @@ mpc-mpcx-ip-writer CURRENT_IP MPC_OR_MPCX_FILE [options]
 Write MPC/MPCX information only:
 
 ```bash
-./bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx
+./install/bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx
 ```
 
 Write MPC/MPCX information and also set the EEPROM/default IP:
 
 ```bash
-./bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx \
+./install/bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx \
   --set-eeprom-ip 192.168.2.170
 ```
 
 Write MPC/MPCX information and also set the current/runtime IP:
 
 ```bash
-./bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx \
+./install/bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx \
   --set-current-ip 192.168.2.170
 ```
 
 Set both EEPROM/default and current/runtime IP addresses:
 
 ```bash
-./bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx \
+./install/bin/mpc-mpcx-ip-writer 192.168.2.161 FILE.mpcx \
   --set-eeprom-ip 192.168.2.170 \
   --set-current-ip 192.168.2.170
 ```
@@ -132,7 +151,7 @@ Set both EEPROM/default and current/runtime IP addresses:
 To **clear only**, without programming a file:
 
 ```bash
-./bin/mpc-mpcx-ip-writer 192.168.10.10 --clear
+./install/bin/mpc-mpcx-ip-writer 192.168.10.10 --clear
 ```
 
 This erases license and saved settings in EEPROM `0xFFFFFC00..0xFFFFFC7F`
@@ -185,13 +204,13 @@ runtime IP, which may be the device's ForceDefault address.
 Preview without writing:
 
 ```bash
-./bin/mpc-mpcx-ip-command mpcx-plan DEVICE_IP FILE.mpcx
+./install/bin/mpc-mpcx-ip-command mpcx-plan DEVICE_IP FILE.mpcx
 ```
 
 Then program using the existing CLI:
 
 ```bash
-./bin/mpc-mpcx-ip-writer DEVICE_IP FILE.mpcx
+./install/bin/mpc-mpcx-ip-writer DEVICE_IP FILE.mpcx
 ```
 
 A diagnostic `??` is not usable as programming data. If the required runtime
@@ -211,8 +230,8 @@ copying beyond `FC4F` is not implemented; `FC50..FC7F` remain unchanged.
 Use these when only SiTCP / SiTCP-XG IP configuration is needed and no MPC/MPCX file should be involved:
 
 ```bash
-./bin/sitcp-sitcpxg-ip-reader 192.168.2.161
-./bin/sitcp-sitcpxg-ip-writer 192.168.2.161 192.168.2.170
+./install/bin/sitcp-sitcpxg-ip-reader 192.168.2.161
+./install/bin/sitcp-sitcpxg-ip-writer 192.168.2.161 192.168.2.170
 ```
 
 The IP-only commands share the low-level IP register helper but do not read or rewrite MPC/MPCX payload data.
@@ -220,7 +239,7 @@ The IP-only commands share the low-level IP register helper but do not read or r
 ## Advanced command
 
 ```bash
-./bin/mpc-mpcx-ip-command --help
+./install/bin/mpc-mpcx-ip-command --help
 ```
 
 Important subcommands include (MPC_OR_MPCX_FILE means a `.mpc` or `.mpcx` license/configuration file):

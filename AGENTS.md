@@ -103,6 +103,11 @@ Do not guess additional destructive register mappings.
 
 Default `PREFIX` is `$(CURDIR)/install`, not `/usr/local`. `make install` must work without root privileges and install all five public commands. System installation remains available with `PREFIX=/usr/local`.
 
+README usage examples must consistently use the default installed path
+`./install/bin/`. Explain `./bin/` separately as build output for development.
+Document that `make` alone does not refresh installed copies and that
+`make install` rebuilds and copies them after source updates.
+
 ## Safety
 
 `mpc-mpcx-ip-command rbcp-write` and `clear` are intentionally low-level/destructive. Keep explicit command names and the `--yes-really-clear` guard for the advanced clear command.
