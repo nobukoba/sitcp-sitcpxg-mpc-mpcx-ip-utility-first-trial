@@ -12,7 +12,7 @@ The installed command set contains five commands:
 - `sitcp-sitcpxg-ip-writer` — IP-only writer for SiTCP / SiTCP-XG.
 - `sitcp-sitcpxg-ip-reader` — IP-only reader for SiTCP / SiTCP-XG.
 
-## Quick start
+## Quick installation
 
 ```bash
 git clone https://github.com/nobukoba/sitcp-sitcpxg-mpc-mpcx-ip-utility-first-trial.git
@@ -21,46 +21,7 @@ make
 make install
 ```
 
-Run these commands from the repository root. The default `PREFIX` is
-`$(CURDIR)`, and `BINDIR` defaults to `$(PREFIX)/bin`.
-No administrator privileges are needed for the default installation.
-
-| Command | Output location | How to run |
-| --- | --- | --- |
-| `make` | `./src/` (build output) | `./src/mpc-mpcx-ip-reader DEVICE_IP` |
-| `make install` | `./bin/` (installed copy) | `./bin/mpc-mpcx-ip-reader DEVICE_IP` |
-
-**All usage examples below use the installed copy in `./bin/`.**
-For development without installation, replace that prefix with `./src/`.
-Both directories contain the same five commands after a successful installation.
-Running `make` alone does not refresh an existing installed copy.
-Older versions installed into `./install/bin/`; those copies are no longer
-updated by the default installation. Use `./bin/` after running `make install`.
-`make clean` removes generated executables from `src/` while retaining source
-files and installed binaries.
-
-After updating the source, rebuild and refresh the installation:
-
-```bash
-git pull --ff-only
-make install
-```
-
-`make install` builds any outdated binaries before copying them.
-
-To choose another installation prefix:
-
-```bash
-make install PREFIX="$HOME/.local"
-"$HOME/.local/bin/mpc-mpcx-ip-reader" DEVICE_IP
-```
-
-If `$HOME/.local/bin` is on your `PATH`, you can also run the command by name.
-With a custom prefix, replace `./bin/` in the examples with your
-chosen `PREFIX/bin/`. For a system installation, use
-`sudo make install PREFIX=/usr/local` (administrator privileges required).
-
-Default RBCP UDP port is `4660`; default timeout is `3` seconds. These defaults are also shown by `--help`.
+`make install` copies the executables into `./bin/`.
 
 ## Writer
 
@@ -111,6 +72,8 @@ an MPC/MPCX file, initialize from RAM, or change runtime/IP registers. Do not
 combine `--clear` with a file, `--set-eeprom-ip`, or `--set-current-ip`.
 `--port` and `--timeout` are supported. Clearing is off by default. Reprogram
 an appropriate license before returning the device to normal boot mode.
+
+Default RBCP UDP port is `4660`; default timeout is `3` seconds. These defaults are also shown by `--help`.
 
 Writer options:
 
@@ -271,6 +234,47 @@ ip-write CURRENT_IP NEW_IP [--eeprom|--current] [--port N] [--timeout SEC]
 - `make`
 
 The default build uses `-std=c++11`. Targets are Linux, macOS, and WSL.
+
+## Installation options and updates
+
+Run build and installation commands from the repository root. The default `PREFIX` is
+`$(CURDIR)`, and `BINDIR` defaults to `$(PREFIX)/bin`.
+No administrator privileges are needed for the default installation.
+
+| Command | Output location | How to run |
+| --- | --- | --- |
+| `make` | `./src/` (build output) | `./src/mpc-mpcx-ip-reader DEVICE_IP` |
+| `make install` | `./bin/` (installed copy) | `./bin/mpc-mpcx-ip-reader DEVICE_IP` |
+
+**All usage examples use the installed copy in `./bin/`.**
+For development without installation, replace that prefix with `./src/`.
+Both directories contain the same five commands after a successful installation.
+Running `make` alone does not refresh an existing installed copy.
+Older versions installed into `./install/bin/`; those copies are no longer
+updated by the default installation. Use `./bin/` after running `make install`.
+`make clean` removes generated executables from `src/` while retaining source
+files and installed binaries.
+
+After updating the source, rebuild and refresh the installation:
+
+```bash
+git pull --ff-only
+make install
+```
+
+`make install` builds any outdated binaries before copying them.
+
+To choose another installation prefix:
+
+```bash
+make install PREFIX="$HOME/.local"
+"$HOME/.local/bin/mpc-mpcx-ip-reader" DEVICE_IP
+```
+
+If `$HOME/.local/bin` is on your `PATH`, you can also run the command by name.
+With a custom prefix, replace `./bin/` in the examples with your
+chosen `PREFIX/bin/`. For a system installation, use
+`sudo make install PREFIX=/usr/local` (administrator privileges required).
 
 ## Source formatting
 
