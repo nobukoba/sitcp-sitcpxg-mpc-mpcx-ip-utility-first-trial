@@ -62,60 +62,6 @@ chosen `PREFIX/bin/`. For a system installation, use
 
 Default RBCP UDP port is `4660`; default timeout is `3` seconds. These defaults are also shown by `--help`.
 
-## Reader
-
-```bash
-./bin/mpc-mpcx-ip-reader 192.168.2.161
-```
-
-The reader always reports:
-
-```text
-current MAC
-current IP
-EEPROM MAC
-EEPROM IP
-```
-
-in separate Runtime and EEPROM sections, followed by MPC/MPCX information
-reconstructed from EEPROM. The runtime length follows the detected device generation:
-
-- Normal SiTCP runtime: `0xFFFFFF00..0xFFFFFF3F` (64 bytes)
-- SiTCP-XG runtime: `0xFFFFFF00..0xFFFFFF4F` (80 bytes)
-- EEPROM (both generations): `0xFFFFFC00..0xFFFFFC4F` (80 bytes)
-
-Raw dumps use 16 hexadecimal bytes per row: four runtime rows for normal SiTCP,
-five for XG, and five EEPROM rows for either generation. SiTCP-XG parameters are
-decoded separately from each region; numeric register values include decimal and
-hexadecimal forms, for example `10000 (0x2710) Mbps` or `4660 (0x1234)`.
-Timeout conversions retain their units alongside the decimal/hex raw value.
-IP addresses include network-byte-order hexadecimal notation, for example
-`192.168.10.10 (0xC0A80A0A)`, in current, EEPROM, server, and compact IP-only
-views. MAC addresses retain their usual colon-hex notation.
-Normal SiTCP does not interpret its license bytes as XG transmission rates.
-
-The same report is available with:
-
-```bash
-./bin/mpc-mpcx-ip-command read 192.168.2.161
-```
-
-Normal SiTCP reports do not request runtime `0xFFFFFF40..0xFFFFFF4F`, which
-the SiTCP register manual lists as access-prohibited. Its EEPROM `FC40..FC4F`
-remains readable and is required for MPC payload reconstruction. XG reports
-include runtime `FF40..FF4F`. If generation detection times out, the report
-fails before selecting a read range. On a block bus error, the diagnostic report reads that block byte by
-byte, displays readable values, and marks rejected bytes as `??`. Warnings
-identify each rejected address. Fields with missing bytes are `unavailable`;
-they are never decoded using placeholder zeros. Runtime and EEPROM remain
-separate, and readable EEPROM information is still displayed.
-
-Read commands return `0` for a complete report, `3` for a partial report, and
-`1` for a fatal error such as a timeout or short reply. Writers use compact
-MAC/IP snapshots and retain mandatory write/read-back verification.
-
-The reader determines the device generation first from the documented SiTCP-XG Identifier register at `0xFFFFFF08..0xFFFFFF0B`. An exact value of `0x58544350` identifies SiTCP-XG. MPC/MPCX payload classification is handled separately and is not used to determine the device generation.
-
 ## Writer
 
 For programming, the MPC/MPCX file is a required positional argument:
@@ -228,6 +174,60 @@ in its normal-SiTCP path, but does not establish a fallback image for MPCX.
 Consequently this implementation does not substitute normal-SiTCP defaults
 into SiTCP-XG. Normal MPC programming is unchanged. Optional official extension
 copying beyond `FC4F` is not implemented; `FC50..FC7F` remain unchanged.
+
+## Reader
+
+```bash
+./bin/mpc-mpcx-ip-reader 192.168.2.161
+```
+
+The reader always reports:
+
+```text
+current MAC
+current IP
+EEPROM MAC
+EEPROM IP
+```
+
+in separate Runtime and EEPROM sections, followed by MPC/MPCX information
+reconstructed from EEPROM. The runtime length follows the detected device generation:
+
+- Normal SiTCP runtime: `0xFFFFFF00..0xFFFFFF3F` (64 bytes)
+- SiTCP-XG runtime: `0xFFFFFF00..0xFFFFFF4F` (80 bytes)
+- EEPROM (both generations): `0xFFFFFC00..0xFFFFFC4F` (80 bytes)
+
+Raw dumps use 16 hexadecimal bytes per row: four runtime rows for normal SiTCP,
+five for XG, and five EEPROM rows for either generation. SiTCP-XG parameters are
+decoded separately from each region; numeric register values include decimal and
+hexadecimal forms, for example `10000 (0x2710) Mbps` or `4660 (0x1234)`.
+Timeout conversions retain their units alongside the decimal/hex raw value.
+IP addresses include network-byte-order hexadecimal notation, for example
+`192.168.10.10 (0xC0A80A0A)`, in current, EEPROM, server, and compact IP-only
+views. MAC addresses retain their usual colon-hex notation.
+Normal SiTCP does not interpret its license bytes as XG transmission rates.
+
+The same report is available with:
+
+```bash
+./bin/mpc-mpcx-ip-command read 192.168.2.161
+```
+
+Normal SiTCP reports do not request runtime `0xFFFFFF40..0xFFFFFF4F`, which
+the SiTCP register manual lists as access-prohibited. Its EEPROM `FC40..FC4F`
+remains readable and is required for MPC payload reconstruction. XG reports
+include runtime `FF40..FF4F`. If generation detection times out, the report
+fails before selecting a read range. On a block bus error, the diagnostic report reads that block byte by
+byte, displays readable values, and marks rejected bytes as `??`. Warnings
+identify each rejected address. Fields with missing bytes are `unavailable`;
+they are never decoded using placeholder zeros. Runtime and EEPROM remain
+separate, and readable EEPROM information is still displayed.
+
+Read commands return `0` for a complete report, `3` for a partial report, and
+`1` for a fatal error such as a timeout or short reply. Writers use compact
+MAC/IP snapshots and retain mandatory write/read-back verification.
+
+The reader determines the device generation first from the documented SiTCP-XG Identifier register at `0xFFFFFF08..0xFFFFFF0B`. An exact value of `0x58544350` identifies SiTCP-XG. MPC/MPCX payload classification is handled separately and is not used to determine the device generation.
 
 ## IP-only commands
 
