@@ -200,7 +200,8 @@ class ReportTests(unittest.TestCase):
         try:
             result = device.run('mpc-mpcx-ip-command', 'ip-write', '127.0.0.1', '192.0.2.20')
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stdout.count('PARTIAL'), 2)
+            self.assertNotIn('PARTIAL', result.stdout)
+            self.assertEqual(len(result.stdout.splitlines()), 5)
             self.assertIn('WRITE/VERIFY OK', result.stdout)
             self.assertEqual(device.memory[0xFFFFFCFF], 255)
         finally:
@@ -215,16 +216,35 @@ class ReportTests(unittest.TestCase):
                     payload.write_bytes(bytes([0x2C] * 7 + [0] * 15) if xg else bytes(22))
                     result = device.run('mpc-mpcx-ip-writer', '127.0.0.1', str(payload))
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(result.stdout.count(
-                    'raw runtime FF00..FF4F:' if xg else 'raw runtime FF00..FF3F:'), 2)
+                self.assertEqual(len(result.stdout.splitlines()), 5)
+                self.assertNotIn('raw runtime', result.stdout)
+                self.assertIn('before: runtime MAC', result.stdout)
+                self.assertIn('after: EEPROM  MAC', result.stdout)
                 if not xg:
                     self.assertNotIn('WARNING', result.stderr)
                     self.assertFalse(any(
                         address < 0xFFFFFF50 and address + length > 0xFFFFFF40
                         for _, address, length in device.requests))
-                self.assertEqual(result.stdout.count('raw EEPROM FC00..FC4F:'), 2)
+                self.assertNotIn('raw EEPROM', result.stdout)
                 self.assertEqual(device.memory[0xFFFFFCFF], 255)
                 self.assertIn('WRITE/VERIFY OK', result.stdout)
+            finally:
+                device.close()
+
+    def test_standalone_ip_writer_compact(self):
+        for current in (False, True):
+            device = Device()
+            try:
+                args = ['127.0.0.1', '127.0.0.1' if current else '192.0.2.20']
+                if current:
+                    args.append('--current')
+                result = device.run('sitcp-sitcpxg-ip-writer', *args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(len(result.stdout.splitlines()), 5)
+                self.assertIn('before: runtime MAC', result.stdout)
+                self.assertIn('after: EEPROM  MAC', result.stdout)
+                self.assertIn('WRITE/VERIFY OK', result.stdout)
+                self.assertIn('(0x7F000001)', result.stdout)
             finally:
                 device.close()
 
@@ -233,7 +253,8 @@ class ReportTests(unittest.TestCase):
         try:
             result = device.run('mpc-mpcx-ip-command', 'ip-write', '127.0.0.1', '192.0.2.20')
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stdout.count('raw runtime FF00..FF4F:'), 2)
+            self.assertEqual(len(result.stdout.splitlines()), 5)
+            self.assertNotIn('raw runtime', result.stdout)
             self.assertIn('192.0.2.20', result.stdout.split('after:', 1)[1])
             self.assertEqual(device.memory[0xFFFFFCFF], 255)
         finally:

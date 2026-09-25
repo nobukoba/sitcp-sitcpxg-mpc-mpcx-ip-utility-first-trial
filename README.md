@@ -88,10 +88,8 @@ they are never decoded using placeholder zeros. Runtime and EEPROM remain
 separate, and readable EEPROM information is still displayed.
 
 Read commands return `0` for a complete report, `3` for a partial report, and
-`1` for a fatal error such as a timeout or short reply. Before/after diagnostic
-bus errors do not prevent a writer from using its existing verified programming
-path; `PARTIAL` describes the report, while `WRITE/VERIFY OK` describes the
-write and read-back verification.
+`1` for a fatal error such as a timeout or short reply. Writers use compact
+MAC/IP snapshots and retain mandatory write/read-back verification.
 
 The reader determines the device generation first from the documented SiTCP-XG Identifier register at `0xFFFFFF08..0xFFFFFF0B`. An exact value of `0x58544350` identifies SiTCP-XG. MPC/MPCX payload classification is handled separately and is not used to determine the device generation.
 
@@ -139,7 +137,7 @@ To **clear only**, without programming a file:
 
 This erases license and saved settings in EEPROM `0xFFFFFC00..0xFFFFFC7F`
 (128 bytes) to `FF`, restores write protection, and verifies every erased byte.
-It displays before/after reports and `CLEAR OK` on success. It does not program
+It displays compact before/after MAC/IP values and `CLEAR OK` in five lines. It does not program
 an MPC/MPCX file, initialize from RAM, or change runtime/IP registers. Do not
 combine `--clear` with a file, `--set-eeprom-ip`, or `--set-current-ip`.
 `--port` and `--timeout` are supported. Clearing is off by default. Reprogram
@@ -158,7 +156,10 @@ Writer options:
 
 When both IP options are given, EEPROM IP is written first and current/runtime IP is changed last. This keeps the original address reachable until all operations that require it have finished. After a current/runtime IP change, the writer reconnects to the new IP and performs read-back verification. It does not blindly retry a timed-out destructive current-IP write because the address may already have changed before the acknowledgement is received.
 
-The writer displays the separate runtime (SiTCP: 64 / XG: 80 bytes) and EEPROM (80 bytes) reports, including current/EEPROM MAC and IP values, before and after the operation. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
+The writer prints five lines: runtime and EEPROM MAC/IP before (two lines),
+after (two lines), and a verified result (one line). IPs retain hexadecimal
+notation. The result includes MPC/MPCX type, RAM initialization or preserved
+settings, and restored protection. Use the reader for full register dumps. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
 
 ## MPCX writing after clearing EEPROM
 
@@ -237,7 +238,7 @@ ip-read IP [--port N] [--timeout SEC]
 ip-write CURRENT_IP NEW_IP [--eeprom|--current] [--port N] [--timeout SEC]
 ```
 
-`read` and `ip-read` display the same full runtime/EEPROM report. `ip-write` displays that report before and after the operation. The standalone IP-only commands retain their compact MAC/IP view. `ip-write` defaults to EEPROM and accepts `--current` for the runtime/current address.
+`read` and `ip-read` display the same full runtime/EEPROM report. `ip-write` and the standalone IP writer print five-line before/after MAC/IP and result summaries. The standalone IP reader retains its compact MAC/IP view. `ip-write` defaults to EEPROM and accepts `--current` for the runtime/current address.
 
 ## Build requirements
 

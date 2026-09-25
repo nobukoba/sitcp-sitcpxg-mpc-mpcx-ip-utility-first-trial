@@ -134,8 +134,7 @@ int main(int argc, char** argv) {
                 }
             }
 
-            std::cout << "before:\n";
-            sitcp_sitcpxg::register_report::show(host, port, timeout);
+            network_config::show_compact(host, port, timeout, "before");
 
             std::string final_host = host;
             if (write_current) {
@@ -147,9 +146,10 @@ int main(int argc, char** argv) {
                     host, new_ip, port, timeout);
             }
 
-            std::cout << "after:\n";
-            sitcp_sitcpxg::register_report::show(final_host, port, timeout);
-            std::cout << "status       : WRITE/VERIFY OK\n";
+            network_config::show_compact(final_host, port, timeout, "after");
+            std::cout << "WRITE/VERIFY OK: "
+                      << (write_current ? "current/runtime IP (reconnected)" : "EEPROM IP")
+                      << '\n';
             return 0;
         }
 

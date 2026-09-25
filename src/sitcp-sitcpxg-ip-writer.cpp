@@ -79,29 +79,17 @@ int main(int argc, char** argv) {
             }
         }
 
-        std::cout << "before:" << std::endl;
-        network_config::show_all(host, port, timeout);
-
+        network_config::show_compact(host, port, timeout, "before");
         if (write_current) {
-            network_config::write_current_ip(
-                host, new_ip, port, timeout);
-            std::cout
-                << "after (reconnected to " << new_ip << "):"
-                << std::endl;
-            network_config::show_all(new_ip, port, timeout);
-            std::cout
-                << "written target : current/runtime IP only" << std::endl
-                << "status         : WRITE/RECONNECT/VERIFY OK"
-                << std::endl;
+            network_config::write_current_ip(host, new_ip, port, timeout);
         } else {
-            network_config::write_eeprom_ip(
-                host, new_ip, port, timeout);
-            std::cout << "after:" << std::endl;
-            network_config::show_all(host, port, timeout);
-            std::cout
-                << "written target : EEPROM IP only" << std::endl
-                << "status         : WRITE/VERIFY OK" << std::endl;
+            network_config::write_eeprom_ip(host, new_ip, port, timeout);
         }
+        network_config::show_compact(
+            write_current ? new_ip : host, port, timeout, "after");
+        std::cout << "WRITE/VERIFY OK: "
+                  << (write_current ? "current/runtime IP (reconnected)" : "EEPROM IP")
+                  << '\n';
 
         return 0;
     } catch (const std::exception& error) {

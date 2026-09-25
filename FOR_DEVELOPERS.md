@@ -342,11 +342,10 @@ For verified payload layouts, the embedded MAC address is `payload[0:6]` for nor
 ## Runtime / EEPROM diagnostic reports
 
 `src/sitcp-sitcpxg-register-report.hpp` supplies the common report used by the
-MPC/MPCX reader, advanced `read` / `ip-read`, and before/after views of the
-MPC/MPCX writer and advanced `ip-write`. It reads runtime FF00..FF3F (64 bytes) for normal SiTCP or FF00..FF4F
+MPC/MPCX reader and advanced `read` / `ip-read`. It reads runtime FF00..FF3F (64 bytes) for normal SiTCP or FF00..FF4F
 (80 bytes) for SiTCP-XG, plus EEPROM FC00..FC4F (80 bytes) for both. Reads use
 8-byte RBCP chunks and separate hex dumps. Identifier timeout aborts range
-selection. The display, completion check, and writer before/after views use
+selection. The display and completion check use
 the selected runtime length. MAC/IP values come directly from their region's registers, never
 from reconstructed payloads. Generation detection still uses only FF08..FF0B.
 The XG parameter decoder is shared by the two regions. Numeric register values
@@ -364,9 +363,11 @@ unreadable bytes within the selected range without suppressing other bytes
 or EEPROM output. Normal SiTCP runtime FF40..FF4F is not requested. Short replies
 and timeouts remain fatal and include the request address.
 
-Read views return 3 for PARTIAL, 0 for COMPLETE, or 1 for fatal errors. Writer
-views label partial diagnostic reports but keep the existing mandatory
-programming/read-back verification and write-protection path. No writes to the
+Read views return 3 for PARTIAL, 0 for COMPLETE, or 1 for fatal errors. Writers
+use shared compact network snapshots (two lines before, two after, one final
+result) instead of full diagnostic reads. They retain mandatory
+programming/read-back verification and write-protection handling. Required
+MPCX initialization still reads the complete runtime image. No writes to the
 runtime tail are introduced.
 
 Validation:
@@ -459,7 +460,7 @@ retain EEPROM FC40..FC4F, and report COMPLETE without expected-tail warnings.
 standalone erase operation (default off), not clear-before-programming.
 It requires no license file and rejects file/IP-change combinations before
 network access. No RAM restoration or subsequent file programming is performed.
-The writer displays the usual before/after register reports.
+The writer displays compact before/after MAC/IP snapshots and the result in five lines.
 
 Both writer `--clear` and advanced `clear IP --yes-really-clear` call the shared
 `src/sitcp-sitcpxg-eeprom-clear.hpp` helper. It enables EEPROM writes, writes FF

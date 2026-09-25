@@ -97,6 +97,16 @@ inline void print_snapshot(const Snapshot& snapshot,
         << prefix << "EEPROM IP    : " << ipv4_string(snapshot.eeprom_ip) << '\n';
 }
 
+inline void show_compact(const std::string& host, uint16_t port,
+                         double timeout, const std::string& phase) {
+    Client client(host, port, timeout);
+    const Snapshot snapshot = read_snapshot(client);
+    std::cout << phase << ": runtime MAC " << mac_string(snapshot.current_mac)
+              << ", IP " << ipv4_string(snapshot.current_ip) << '\n'
+              << phase << ": EEPROM  MAC " << mac_string(snapshot.eeprom_mac)
+              << ", IP " << ipv4_string(snapshot.eeprom_ip) << std::endl;
+}
+
 inline Snapshot show_all(const std::string& host, uint16_t port,
                          double timeout, const std::string& prefix = "") {
     Client client(host, port, timeout);

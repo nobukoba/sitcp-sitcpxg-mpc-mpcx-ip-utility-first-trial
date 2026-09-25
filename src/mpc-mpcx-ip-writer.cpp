@@ -1,4 +1,4 @@
-#include "sitcp-sitcpxg-register-report.hpp"
+#include "sitcp-sitcpxg-network-config.hpp"
 #include "sitcp-sitcpxg-eeprom-init.hpp"
 #include "sitcp-sitcpxg-eeprom-clear.hpp"
 #include "sitcp-sitcpxg-rbcp.hpp"
@@ -59,22 +59,6 @@ void write_exact(
                 "short RBCP ACK while writing EEPROM");
         }
     }
-}
-
-std::string hex_bytes(const std::vector<uint8_t>& data,
-                      size_t begin = 0, size_t end = static_cast<size_t>(-1),
-                      char separator = ' ') {
-    end = std::min(end, data.size());
-
-    std::ostringstream output;
-    output << std::hex << std::setfill('0');
-    for (size_t i = begin; i < end; ++i) {
-        if (i != begin) {
-            output << separator;
-        }
-        output << std::setw(2) << static_cast<unsigned>(data[i]);
-    }
-    return output.str();
 }
 
 void field(const std::string& name, const std::string& value) {
@@ -180,13 +164,6 @@ std::vector<uint8_t> program(
         bool initialized = false;
         image = sitcp_sitcpxg::eeprom_init::prepare_mpcx_image(
             client, eeprom, payload, initialized);
-        field("EEPROM initialization", initialized
-              ? "current RAM FF00..FF4F -> EEPROM FC00..FC4F (MPCX overlaid)"
-              : "not needed; existing EEPROM settings preserved");
-        field("FC10..FC11 source", initialized ? "runtime" : "EEPROM");
-        field("FC18..FC4F action", initialized
-              ? "copy runtime settings, including FC40..FC41 rate"
-              : "leave unchanged");
     } else {
         image = eeprom;
         std::copy(payload.begin(), payload.begin() + 6, image.begin() + 0x12);
@@ -232,7 +209,7 @@ void usage(const char* argv0) {
 }
 }
 
-inline int run_mpc_mpcx_writer(int argc, char** argv) {
+inline int run_mpc_mpcx_writer(int argc, char** argv, std::string& summary) {
     try {
         if (argc == 2 && (std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help")) {
             usage(argv[0]);
@@ -282,15 +259,6 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
         std::string detection;
         const int target_type = detect_target(client, detection);
 
-        field("command", "write");
-        field("target", ip + ":" + std::to_string(port));
-        field("file", file_path);
-        field("file type", type_name(file_type));
-        field("target type", type_name(target_type));
-        field("detection", detection);
-        field("writer type", std::to_string(file_type));
-        field("file payload", hex_bytes(payload));
-
         if ((target_type == 1 || target_type == 2) && target_type != file_type) {
             field("status", "REFUSED: TARGET TYPE MISMATCH");
             return 7;
@@ -300,21 +268,11 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
             return 7;
         }
 
-        field("operation", "programming EEPROM");
-        const auto rb = program(client, payload, file_type, eeprom);
-        if (file_type == 1) {
-            field("read-back FC10..FC11", hex_bytes(rb, 16, 18));
-            field(rb.size() == 0x50 ? "read-back FC00..FC4F"
-                                    : "read-back FC00..FC17", hex_bytes(rb));
-            field("read-back MAC", hex_bytes(rb, 18, 24, ':'));
-        } else {
-            field("read-back MAC", hex_bytes(rb, 0x12, 0x18, ':'));
-            field("read-back FC40..FC4F", hex_bytes(rb, 0x40, 0x50));
-        }
-        field("write", "OK");
-        field("read-back verify", "OK");
-        field("EEPROM write protect", "ENABLED");
-        field("status", "WRITE OK");
+        program(client, payload, file_type, eeprom);
+        summary = type_name(file_type) + "; " +
+            ((file_type == 1 && (eeprom[0x10] & 0x80) != 0)
+             ? "EEPROM initialization: current RAM"
+             : "existing EEPROM settings preserved");
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "ERROR: " << e.what() << "\n";
@@ -413,19 +371,14 @@ int main(int argc, char** argv) {
             throw std::runtime_error("an MPC/MPCX file or --clear is required");
         }
 
-        std::cout << "before:\n";
-        sitcp_sitcpxg::register_report::show(host, port, timeout);
+        sitcp_sitcpxg::network_config::show_compact(host, port, timeout, "before");
 
         if (clear_only) {
-            field("command", "clear");
-            field("EEPROM area", "0xFFFFFC00..0xFFFFFC7F (128 bytes)");
             rbcp::Client client(host, port, timeout);
             sitcp_sitcpxg::eeprom_clear::clear_and_verify(client);
-            field("read-back verify", "OK (all 128 bytes are FF)");
-            field("EEPROM write protect", "ENABLED");
-            std::cout << "after:\n";
-            sitcp_sitcpxg::register_report::show(host, port, timeout);
-            field("status", "CLEAR OK");
+            sitcp_sitcpxg::network_config::show_compact(host, port, timeout, "after");
+            std::cout << "CLEAR OK: " << host << ':' << port
+                      << "; EEPROM FC00..FC7F = FF (128 bytes verified); protected\n";
             return 0;
         }
 
@@ -444,27 +397,26 @@ int main(int argc, char** argv) {
             writer_argv.push_back(&(*it)[0]);
         }
 
+        std::string summary;
         const int writer_result = run_mpc_mpcx_writer(
-            static_cast<int>(writer_argv.size()), &writer_argv[0]);
+            static_cast<int>(writer_argv.size()), &writer_argv[0], summary);
         if (writer_result != 0) {
             return writer_result;
         }
 
         if (has_eeprom_ip) {
-            std::cout << "EEPROM IP operation : " << eeprom_ip << '\n';
             sitcp_sitcpxg::network_config::write_eeprom_ip(host, eeprom_ip, port, timeout);
         }
 
         std::string final_host = host;
         if (has_current_ip) {
-            std::cout << "current IP operation: " << current_ip << '\n';
             sitcp_sitcpxg::network_config::write_current_ip(host, current_ip, port, timeout);
             final_host = current_ip;
         }
 
-        std::cout << "after:\n";
-        sitcp_sitcpxg::register_report::show(final_host, port, timeout);
-        std::cout << "status       : WRITE/VERIFY OK\n";
+        sitcp_sitcpxg::network_config::show_compact(final_host, port, timeout, "after");
+        std::cout << "WRITE/VERIFY OK: " << final_host << ':' << port
+                  << "; " << summary << "; protected\n";
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "ERROR: " << error.what() << '\n';

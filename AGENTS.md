@@ -140,8 +140,12 @@ Keep these documents synchronized with implementation changes:
   its FC40..FC4F license data. Keep the two regions separately labeled with
   the actual range/length; COMPLETE means all bytes in those selected ranges.
 - If generation detection times out, fail before reading a guessed range.
-- Share report logic across the MPC/MPCX reader, advanced read/ip-read, and
-  MPC/MPCX and advanced IP writer before/after views.
+- Share detailed report logic across the MPC/MPCX reader and advanced read/ip-read.
+- Writer success output must stay within five lines: two compact MAC/IP lines
+  before, two after, and one result line. Apply this to MPC/MPCX programming,
+  writer --clear, standalone IP writer, and advanced ip-write. Use shared
+  network snapshots instead of full diagnostic dumps; preserve verification
+  and failure reporting. Reader output remains detailed.
 - Display decoded numeric register values in decimal and hexadecimal together;
   retain units and conventional IP/MAC notation. Append eight uppercase hex
   digits in network byte order to displayed register IPs, including server IP
