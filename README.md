@@ -23,7 +23,7 @@ make install
 
 `make install` copies the executables into `./bin/`.
 
-## Writer
+## How to use the writer
 
 For programming, the MPC/MPCX file is a required positional argument:
 
@@ -138,7 +138,7 @@ Consequently this implementation does not substitute normal-SiTCP defaults
 into SiTCP-XG. Normal MPC programming is unchanged. Optional official extension
 copying beyond `FC4F` is not implemented; `FC50..FC7F` remain unchanged.
 
-## Reader
+## How to use the reader
 
 ```bash
 ./bin/mpc-mpcx-ip-reader 192.168.2.161
@@ -192,7 +192,7 @@ MAC/IP snapshots and retain mandatory write/read-back verification.
 
 The reader determines the device generation first from the documented SiTCP-XG Identifier register at `0xFFFFFF08..0xFFFFFF0B`. An exact value of `0x58544350` identifies SiTCP-XG. MPC/MPCX payload classification is handled separately and is not used to determine the device generation.
 
-## IP-only commands
+## How to use the IP-only commands
 
 Use these when only SiTCP / SiTCP-XG IP configuration is needed and no MPC/MPCX file should be involved:
 
@@ -203,7 +203,7 @@ Use these when only SiTCP / SiTCP-XG IP configuration is needed and no MPC/MPCX 
 
 The IP-only commands share the low-level IP register helper but do not read or rewrite MPC/MPCX payload data.
 
-## Advanced command
+## How to use the advanced command
 
 ```bash
 ./bin/mpc-mpcx-ip-command --help
