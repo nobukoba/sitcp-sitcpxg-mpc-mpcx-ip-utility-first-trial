@@ -2,6 +2,7 @@
 
 #include "sitcp-sitcpxg-rbcp.hpp"
 #include "sitcp-sitcpxg-eeprom-init.hpp"
+#include "sitcp-sitcpxg-eeprom-clear.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -487,46 +488,7 @@ inline int run_mpc_mpcx_command(int argc, char** argv) {
                 argv[0], ip, argc, argv, 4);
             RbcpClient client(target.ip, target.port, target.timeout);
 
-            const std::vector<uint8_t> enable(1, 0x00);
-            const std::vector<uint8_t> protect(1, 0xFF);
-            const std::vector<uint8_t> erased_block(16, 0xFF);
-
-            const std::vector<uint8_t> enable_ack =
-                client.write(EEPROM_WRITE_ENABLE, enable);
-            if (enable_ack.size() != enable.size()) {
-                throw Error(
-                    "unexpected RBCP ACK length enabling EEPROM writes");
-            }
-
-            try {
-                for (uint32_t offset = 0; offset < 0x80; offset += 16) {
-                    const std::vector<uint8_t> ack = client.write(
-                        EEPROM_BASE + offset, erased_block);
-                    if (ack.size() != erased_block.size()) {
-                        throw Error(
-                            "unexpected RBCP ACK length while clearing EEPROM");
-                    }
-                }
-            } catch (...) {
-                try {
-                    client.write(EEPROM_WRITE_ENABLE, protect);
-                } catch (...) {
-                }
-                throw;
-            }
-
-            const std::vector<uint8_t> protect_ack =
-                client.write(EEPROM_WRITE_ENABLE, protect);
-            if (protect_ack.size() != protect.size()) {
-                throw Error(
-                    "unexpected RBCP ACK length restoring EEPROM protection");
-            }
-
-            const std::vector<uint8_t> actual =
-                read_exact(client, EEPROM_BASE, 0x80);
-            if (actual != std::vector<uint8_t>(0x80, 0xFF)) {
-                throw Error("EEPROM clear read-back verification failed");
-            }
+            sitcp_sitcpxg::eeprom_clear::clear_and_verify(client);
 
             field("command", "clear");
             field("EEPROM area", "0xFFFFFC00..0xFFFFFC7F");

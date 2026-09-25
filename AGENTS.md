@@ -18,7 +18,7 @@ Keep command names, option defaults, and output formatting consistent. All `--he
 
 ## Writer CLI
 
-The high-level writer requires an MPC/MPCX file:
+The high-level programming mode requires an MPC/MPCX file:
 
 ```text
 mpc-mpcx-ip-writer CURRENT_IP MPC_OR_MPCX_FILE [options]
@@ -33,7 +33,11 @@ IP rewriting is optional and uses explicit destination-specific options:
 - When both are specified, perform EEPROM IP writing before current/runtime IP writing so the original address remains reachable until the final network-address-changing operation.
 - After changing current/runtime IP, reconnect to the new address and perform read-back verification.
 
-The writer must always program/verify the supplied MPC/MPCX file. IP-only operation through `mpc-mpcx-ip-writer` is not part of the public CLI. Keep the standalone `sitcp-sitcpxg-ip-writer` and `sitcp-sitcpxg-ip-reader` commands for IP-only use.
+The programming mode must always program/verify the supplied MPC/MPCX file.
+The explicit `CURRENT_IP --clear` mode requires no file and only erases/verifies
+EEPROM FC00..FC7F, restoring protection. Reject file/IP-change combinations
+before any device access. Never clear automatically before programming.
+IP-only operation through `mpc-mpcx-ip-writer` is not part of the public CLI. Keep the standalone `sitcp-sitcpxg-ip-writer` and `sitcp-sitcpxg-ip-reader` commands for IP-only use.
 
 ## Unified CLI, separated internals
 
@@ -101,7 +105,9 @@ Default `PREFIX` is `$(CURDIR)/install`, not `/usr/local`. `make install` must w
 
 ## Safety
 
-`mpc-mpcx-ip-command rbcp-write` and `clear` are intentionally low-level/destructive. Keep explicit command names and the `--yes-really-clear` guard for clear.
+`mpc-mpcx-ip-command rbcp-write` and `clear` are intentionally low-level/destructive. Keep explicit command names and the `--yes-really-clear` guard for the advanced clear command.
+Writer `--clear` is an explicit standalone clear-only request and needs no
+additional guard. Both entry points share `sitcp-sitcpxg-eeprom-clear.hpp`.
 
 Never commit proprietary MPC/MPCX files, official proprietary executables/libraries, credentials, or device-specific secrets.
 

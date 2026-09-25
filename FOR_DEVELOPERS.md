@@ -449,3 +449,23 @@ still requires its complete 80-byte runtime image; programming maps are unchange
 Simulator tests reject the entire normal-SiTCP runtime tail and verify that
 reader/advanced read/ip-read and writer diagnostics never request those bytes,
 retain EEPROM FC40..FC4F, and report COMPLETE without expected-tail warnings.
+
+## Writer clear-only mode
+
+`mpc-mpcx-ip-writer IP --clear [--port N] [--timeout SEC]` is an explicit
+standalone erase operation (default off), not clear-before-programming.
+It requires no license file and rejects file/IP-change combinations before
+network access. No RAM restoration or subsequent file programming is performed.
+The writer displays the usual before/after register reports.
+
+Both writer `--clear` and advanced `clear IP --yes-really-clear` call the shared
+`src/sitcp-sitcpxg-eeprom-clear.hpp` helper. It enables EEPROM writes, writes FF
+to FC00..FC7F in 16-byte blocks, restores protection, then verifies all 128
+bytes in 8-byte reads. An enable/write failure triggers a protection attempt;
+no destructive data write is retried. Verification failure is not CLEAR OK.
+The advanced command retains its existing guard; writer `--clear` itself is
+the explicit clear-only selector. The operation does not write runtime space.
+
+`tests/test_writer_clear.py` covers both generations, exact write ranges and
+sequence, unchanged runtime, conflict rejection before device access, failed
+or lost ACKs, read-back mismatch, protection cleanup, and the advanced guard.

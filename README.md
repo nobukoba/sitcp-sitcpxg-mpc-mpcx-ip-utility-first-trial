@@ -95,7 +95,7 @@ The reader determines the device generation first from the documented SiTCP-XG I
 
 ## Writer
 
-The MPC/MPCX file is a required positional argument:
+For programming, the MPC/MPCX file is a required positional argument:
 
 ```text
 mpc-mpcx-ip-writer CURRENT_IP MPC_OR_MPCX_FILE [options]
@@ -129,9 +129,24 @@ Set both EEPROM/default and current/runtime IP addresses:
   --set-current-ip 192.168.2.170
 ```
 
+To **clear only**, without programming a file:
+
+```bash
+./bin/mpc-mpcx-ip-writer 192.168.10.10 --clear
+```
+
+This erases license and saved settings in EEPROM `0xFFFFFC00..0xFFFFFC7F`
+(128 bytes) to `FF`, restores write protection, and verifies every erased byte.
+It displays before/after reports and `CLEAR OK` on success. It does not program
+an MPC/MPCX file, initialize from RAM, or change runtime/IP registers. Do not
+combine `--clear` with a file, `--set-eeprom-ip`, or `--set-current-ip`.
+`--port` and `--timeout` are supported. Clearing is off by default. Reprogram
+an appropriate license before returning the device to normal boot mode.
+
 Writer options:
 
 ```text
+--clear              Clear EEPROM only; no file/IP changes (default: off)
 --set-eeprom-ip IP   Set EEPROM/default IP address
 --set-current-ip IP  Set current/runtime IP address
 --port N             RBCP UDP port (default: 4660)

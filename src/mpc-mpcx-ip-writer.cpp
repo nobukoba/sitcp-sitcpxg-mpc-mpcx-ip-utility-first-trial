@@ -1,5 +1,6 @@
 #include "sitcp-sitcpxg-register-report.hpp"
 #include "sitcp-sitcpxg-eeprom-init.hpp"
+#include "sitcp-sitcpxg-eeprom-clear.hpp"
 #include "sitcp-sitcpxg-rbcp.hpp"
 
 #include <algorithm>
@@ -326,12 +327,15 @@ namespace {
 
 void unified_usage(const char* program) {
     std::cerr
-        << "Usage: " << program << " CURRENT_IP MPC_OR_MPCX_FILE [options]\n\n"
+        << "Usage: " << program << " CURRENT_IP MPC_OR_MPCX_FILE [options]\n"
+        << "       " << program << " CURRENT_IP --clear [--port N] [--timeout SEC]\n\n"
         << "Programs an MPC/MPCX file and optionally changes the SiTCP IP address.\n"
         << "For uninitialized MPCX EEPROM (FC10 bit7 set), restores settings\n"
         << "from complete runtime FF00..FF4F before overlaying the MPCX file.\n"
         << "If runtime cannot be read, stops before writing; no guessed defaults.\n\n"
         << "Options:\n"
+        << "  --clear              Clear only: erase EEPROM FC00..FC7F (default: off)\n"
+        << "                       Deletes license/settings; no file or IP changes allowed\n"
         << "  --set-eeprom-ip IP   Set EEPROM/default IP address\n"
         << "  --set-current-ip IP  Set current/runtime IP address\n"
         << "  --port N             RBCP UDP port (default: "
@@ -358,7 +362,9 @@ int main(int argc, char** argv) {
         }
 
         const std::string host = argv[1];
-        const std::string file = argv[2];
+        const bool has_file = std::string(argv[2]).find("--") != 0;
+        const std::string file = has_file ? argv[2] : "";
+        bool clear_only = false;
 
         bool has_eeprom_ip = false;
         bool has_current_ip = false;
@@ -367,10 +373,12 @@ int main(int argc, char** argv) {
         uint16_t port = sitcp_sitcpxg::network_config::DEFAULT_PORT;
         double timeout = sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT;
 
-        for (int i = 3; i < argc; ++i) {
+        for (int i = has_file ? 3 : 2; i < argc; ++i) {
             const std::string option = argv[i];
 
-            if (option == "--set-eeprom-ip" && i + 1 < argc) {
+            if (option == "--clear") {
+                clear_only = true;
+            } else if (option == "--set-eeprom-ip" && i + 1 < argc) {
                 eeprom_ip = argv[++i];
                 has_eeprom_ip = true;
                 (void)sitcp_sitcpxg::network_config::parse_ipv4(eeprom_ip);
@@ -397,8 +405,29 @@ int main(int argc, char** argv) {
             }
         }
 
+        if (clear_only && (has_file || has_eeprom_ip || has_current_ip)) {
+            throw std::runtime_error(
+                "--clear is clear-only; do not specify an MPC/MPCX file or IP changes");
+        }
+        if (!clear_only && !has_file) {
+            throw std::runtime_error("an MPC/MPCX file or --clear is required");
+        }
+
         std::cout << "before:\n";
         sitcp_sitcpxg::register_report::show(host, port, timeout);
+
+        if (clear_only) {
+            field("command", "clear");
+            field("EEPROM area", "0xFFFFFC00..0xFFFFFC7F (128 bytes)");
+            rbcp::Client client(host, port, timeout);
+            sitcp_sitcpxg::eeprom_clear::clear_and_verify(client);
+            field("read-back verify", "OK (all 128 bytes are FF)");
+            field("EEPROM write protect", "ENABLED");
+            std::cout << "after:\n";
+            sitcp_sitcpxg::register_report::show(host, port, timeout);
+            field("status", "CLEAR OK");
+            return 0;
+        }
 
         std::vector<std::string> writer_args;
         writer_args.push_back(argv[0]);
