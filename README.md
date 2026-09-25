@@ -158,7 +158,8 @@ When both IP options are given, EEPROM IP is written first and current/runtime I
 
 The writer prints five nonempty lines: runtime and EEPROM MAC/IP before (two lines),
 after (two lines), then a blank line and
-`Success! All operations completed and verified.` IPs retain hexadecimal
+`Success! All operations completed and verified.`, followed by another blank line.
+Use one space after `before:` and two after `after:` to align the fields. IPs retain hexadecimal
 notation. Success is printed only after all requested operations and verification complete. Use the reader for full register dumps. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
 
 ## MPCX writing after clearing EEPROM

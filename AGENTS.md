@@ -143,7 +143,8 @@ Keep these documents synchronized with implementation changes:
 - Share detailed report logic across the MPC/MPCX reader and advanced read/ip-read.
 - Writer success output must stay within five nonempty lines: two compact MAC/IP lines
   before, two after, a blank line, then exactly
-  `Success! All operations completed and verified.` Only print success after
+  `Success! All operations completed and verified.`, followed by a blank line.
+  Align labels using one space after `before:` and two after `after:`. Only print success after
   all requested operations and verification succeed; omit target/status metadata. Apply this to MPC/MPCX programming,
   writer --clear, standalone IP writer, and advanced ip-write. Use shared
   network snapshots instead of full diagnostic dumps; preserve verification

@@ -14,7 +14,7 @@ class WriterClearTests(unittest.TestCase):
                 result = device.run('mpc-mpcx-ip-writer', '127.0.0.1', '--clear')
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn('Success!', result.stdout)
-                self.assertEqual(len(result.stdout.splitlines()), 6)
+                self.assertEqual(len(result.stdout.splitlines()), 7)
                 self.assertNotIn('EEPROM initialization:', result.stdout)
                 self.assertIn('before:', result.stdout)
                 self.assertIn('after:', result.stdout)

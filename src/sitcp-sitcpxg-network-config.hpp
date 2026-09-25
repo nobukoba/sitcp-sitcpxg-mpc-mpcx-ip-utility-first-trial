@@ -98,16 +98,17 @@ inline void print_snapshot(const Snapshot& snapshot,
 }
 
 inline void print_success() {
-    std::cout << "\nSuccess! All operations completed and verified.\n";
+    std::cout << "\nSuccess! All operations completed and verified.\n\n";
 }
 
 inline void show_compact(const std::string& host, uint16_t port,
                          double timeout, const std::string& phase) {
     Client client(host, port, timeout);
     const Snapshot snapshot = read_snapshot(client);
-    std::cout << phase << ": runtime MAC " << mac_string(snapshot.current_mac)
+    const std::string label = phase + (phase == "after" ? ":  " : ": ");
+    std::cout << label << "runtime MAC " << mac_string(snapshot.current_mac)
               << ", IP " << ipv4_string(snapshot.current_ip) << '\n'
-              << phase << ": EEPROM  MAC " << mac_string(snapshot.eeprom_mac)
+              << label << "EEPROM  MAC " << mac_string(snapshot.eeprom_mac)
               << ", IP " << ipv4_string(snapshot.eeprom_ip) << std::endl;
 }
 

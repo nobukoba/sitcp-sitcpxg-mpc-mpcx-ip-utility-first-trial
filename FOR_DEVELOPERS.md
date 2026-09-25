@@ -365,7 +365,7 @@ and timeouts remain fatal and include the request address.
 
 Read views return 3 for PARTIAL, 0 for COMPLETE, or 1 for fatal errors. Writers
 use shared compact network snapshots (two lines before, two after, a blank separator, then
-`Success! All operations completed and verified.`) instead of full diagnostic reads. They retain mandatory
+`Success! All operations completed and verified.`, followed by a blank line) instead of full diagnostic reads. They retain mandatory
 programming/read-back verification and write-protection handling. Required
 MPCX initialization still reads the complete runtime image. No writes to the
 runtime tail are introduced.
@@ -473,3 +473,5 @@ the explicit clear-only selector. The operation does not write runtime space.
 `tests/test_writer_clear.py` covers both generations, exact write ranges and
 sequence, unchanged runtime, conflict rejection before device access, failed
 or lost ACKs, read-back mismatch, protection cleanup, and the advanced guard.
+
+Compact writer labels use `before: ` and `after:  ` to align MAC/IP fields.
