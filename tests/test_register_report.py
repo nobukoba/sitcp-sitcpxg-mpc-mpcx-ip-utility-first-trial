@@ -87,8 +87,8 @@ class Device:
 class ReportTests(unittest.TestCase):
     def check_dump(self, output, device):
         runtime, eeprom = output.split('EEPROM (0xFFFFFC00', 1)
-        self.assertIn('current IP          : 127.0.0.1', runtime)
-        self.assertIn('EEPROM IP           : 192.0.2.10', eeprom)
+        self.assertIn('current IP          : 127.0.0.1 (0x7F000001)', runtime)
+        self.assertIn('EEPROM IP           : 192.0.2.10 (0xC000020A)', eeprom)
         for base in (0xFFFFFF00, 0xFFFFFC00):
             length = 64 if base == 0xFFFFFF00 and not device.xg else 80
             for offset in range(0, length, 16):

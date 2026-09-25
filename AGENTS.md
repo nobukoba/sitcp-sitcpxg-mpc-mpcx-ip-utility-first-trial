@@ -143,7 +143,9 @@ Keep these documents synchronized with implementation changes:
 - Share report logic across the MPC/MPCX reader, advanced read/ip-read, and
   MPC/MPCX and advanced IP writer before/after views.
 - Display decoded numeric register values in decimal and hexadecimal together;
-  retain units and conventional IP/MAC notation. Raw byte dumps remain hex.
+  retain units and conventional IP/MAC notation. Append eight uppercase hex
+  digits in network byte order to displayed register IPs, including server IP
+  and compact IP-only views: `192.168.10.10 (0xC0A80A0A)`. Raw dumps remain hex.
 - Decode each region from its own bytes. Only apply the XG parameter map after
   exact identifier detection, never to normal SiTCP license bytes.
 - Diagnostic block bus errors must fall back to byte reads, preserve readable

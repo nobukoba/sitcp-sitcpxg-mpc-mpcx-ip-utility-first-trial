@@ -43,10 +43,17 @@ inline std::string ipv4_string(const std::vector<uint8_t>& data) {
         throw Error("invalid IP read length");
     }
 
-    return std::to_string(data[0]) + "." +
-           std::to_string(data[1]) + "." +
-           std::to_string(data[2]) + "." +
-           std::to_string(data[3]);
+    std::ostringstream output;
+    output << static_cast<unsigned>(data[0]) << '.'
+           << static_cast<unsigned>(data[1]) << '.'
+           << static_cast<unsigned>(data[2]) << '.'
+           << static_cast<unsigned>(data[3]) << " (0x"
+           << std::hex << std::uppercase << std::setfill('0');
+    for (uint8_t byte : data) {
+        output << std::setw(2) << static_cast<unsigned>(byte);
+    }
+    output << ')';
+    return output.str();
 }
 
 inline std::string mac_string(const std::vector<uint8_t>& data) {

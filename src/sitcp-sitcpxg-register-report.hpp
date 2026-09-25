@@ -124,10 +124,8 @@ inline std::string format_mac(const std::vector<uint8_t>& data, size_t offset) {
 }
 
 inline std::string format_ipv4(const std::vector<uint8_t>& data, size_t offset) {
-    return std::to_string(data[offset]) + "." +
-           std::to_string(data[offset + 1]) + "." +
-           std::to_string(data[offset + 2]) + "." +
-           std::to_string(data[offset + 3]);
+    return network_config::ipv4_string(
+        std::vector<uint8_t>(data.begin() + offset, data.begin() + offset + 4));
 }
 
 inline std::string decimal_hex(uint32_t value, int width = 4) {

@@ -66,7 +66,9 @@ five for XG, and five EEPROM rows for either generation. SiTCP-XG parameters are
 decoded separately from each region; numeric register values include decimal and
 hexadecimal forms, for example `10000 (0x2710) Mbps` or `4660 (0x1234)`.
 Timeout conversions retain their units alongside the decimal/hex raw value.
-IP and MAC addresses retain their usual dotted-decimal/colon-hex notation.
+IP addresses include network-byte-order hexadecimal notation, for example
+`192.168.10.10 (0xC0A80A0A)`, in current, EEPROM, server, and compact IP-only
+views. MAC addresses retain their usual colon-hex notation.
 Normal SiTCP does not interpret its license bytes as XG transmission rates.
 
 The same report is available with:

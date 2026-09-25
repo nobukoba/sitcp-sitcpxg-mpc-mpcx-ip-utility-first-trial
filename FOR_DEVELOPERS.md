@@ -351,7 +351,10 @@ the selected runtime length. MAC/IP values come directly from their region's reg
 from reconstructed payloads. Generation detection still uses only FF08..FF0B.
 The XG parameter decoder is shared by the two regions. Numeric register values
 are decimal plus uppercase zero-padded hex; converted timeout units remain
-visible. Out-of-range rates retain their raw value without claiming Mbps.
+visible. Register IP fields use the shared network helper to append eight
+uppercase hexadecimal digits in network byte order (including zero padding),
+e.g. `192.168.10.10 (0xC0A80A0A)`; this includes server and standalone IP views.
+Out-of-range rates retain their raw value without claiming Mbps.
 Normal SiTCP retains raw dumps without applying the XG parameter map.
 
 A diagnostic block bus error triggers byte-by-byte reads of that block. Each
