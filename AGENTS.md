@@ -142,3 +142,27 @@ Keep these documents synchronized with implementation changes:
 - Partial diagnostic bus errors must not block the existing verified writer
   path. Keep standalone IP-only commands compact.
 - Run `python3 tests/test_register_report.py` after changing diagnostic reports.
+
+## MPCX EEPROM initialization
+
+- Use `src/sitcp-sitcpxg-eeprom-init.hpp` for both writer image preparation and
+  read-only `mpcx-plan`. Validate the file and exact XG identifier before use.
+- EEPROM FC10 bit7 selects initialization, including FF after clear; do not use
+  license classification, rate validity, or an all-FF-image test instead.
+- If initialization is needed, require a complete runtime FF00..FF4F image,
+  verify its XG identifier and reject a set runtime RESET bit. Overlay MPCX
+  bytes at FC00..FC0F and FC12..FC17; retain RAM at FC10..FC11 and FC18..FC4F.
+  Write/read-back verify the resulting 80 bytes, including FC40..FC4F.
+- If FC10 bit7 is clear, keep the 24-byte MPCX programming path and preserve
+  EEPROM configuration. Do not replace an existing rate because it looks odd.
+- Never program diagnostic placeholder bytes or mix partial RAM with invented
+  defaults. No verified MPCX default image exists in our evidence. The official
+  normal-SiTCP fallback table must not be reused for SiTCP-XG.
+- Leave FC50..FC7F unchanged; official optional extension copying is outside
+  this implementation. Do not imply full official-tool equivalence.
+- Always prepare the complete image before enabling writes. Attempt protection
+  restoration even after an ambiguous enable ACK; never retry data writes.
+- Keep EEPROM IP overrides after image programming, and runtime IP changes
+  last with reconnect/read-back verification. Never clear implicitly.
+- Keep public documentation, static-analysis findings, and physical-device
+  verification distinct. Run `python3 -m unittest discover -s tests -v`.

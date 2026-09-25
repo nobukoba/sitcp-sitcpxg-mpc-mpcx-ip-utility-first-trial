@@ -139,6 +139,50 @@ When both IP options are given, EEPROM IP is written first and current/runtime I
 
 The writer displays the separate full 80-byte runtime and EEPROM reports, including current/EEPROM MAC and IP values, before and after the operation. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
 
+## MPCX writing after clearing EEPROM
+
+`mpc-mpcx-ip-writer` automatically checks EEPROM `0xFFFFFC10` bit7 for
+SiTCP-XG. When this bit is set (including `FF` after `clear`), it reads the
+complete runtime `0xFFFFFF00..0xFFFFFF4F` and builds an 80-byte EEPROM image:
+
+| EEPROM range | Source when initialization is needed |
+| --- | --- |
+| `FC00..FC0F` | MPCX file, first 16 bytes |
+| `FC10..FC11` | Runtime `FF10..FF11` |
+| `FC12..FC17` | MPCX file, final 6 bytes (MAC) |
+| `FC18..FC4F` | Runtime `FF18..FF4F`, including the transmission rate |
+
+It writes and verifies all 80 bytes. When bit7 is clear, the existing 24-byte
+MPCX write path preserves EEPROM settings, including `FC40..FC4F`. This is not
+an automatic rate repair: runtime values are copied as read. Explicit
+`--set-eeprom-ip` and `--set-current-ip` operations still follow programming,
+in that order. Without an EEPROM IP override, initialization saves the current
+runtime IP, which may be the device's ForceDefault address.
+
+Preview without writing:
+
+```bash
+./bin/mpc-mpcx-ip-command mpcx-plan DEVICE_IP FILE.mpcx
+```
+
+Then program using the existing CLI:
+
+```bash
+./bin/mpc-mpcx-ip-writer DEVICE_IP FILE.mpcx
+```
+
+A diagnostic `??` is not usable as programming data. If the required runtime
+image cannot be read in full, or its identifier/reset bit is inconsistent,
+initialization stops before releasing EEPROM write protection. No incomplete
+image, guessed default value, or automatic clear is written.
+
+The official guide describes both RAM-based initialization and default-value
+fallback. Analysis of version `0.4.1-2-gc782` confirms a fixed-default fallback
+in its normal-SiTCP path, but does not establish a fallback image for MPCX.
+Consequently this implementation does not substitute normal-SiTCP defaults
+into SiTCP-XG. Normal MPC programming is unchanged. Optional official extension
+copying beyond `FC4F` is not implemented; `FC50..FC7F` remain unchanged.
+
 ## IP-only commands
 
 Use these when only SiTCP / SiTCP-XG IP configuration is needed and no MPC/MPCX file should be involved:

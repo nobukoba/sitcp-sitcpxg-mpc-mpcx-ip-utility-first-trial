@@ -1,6 +1,7 @@
 #pragma once
 
 #include "sitcp-sitcpxg-rbcp.hpp"
+#include "sitcp-sitcpxg-eeprom-init.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -427,18 +428,22 @@ inline int run_mpc_mpcx_command(int argc, char** argv) {
                     throw Error("payload is not classified as SiTCP-XG");
                 }
 
-                std::vector<uint8_t> expected(
-                    eeprom.begin(), eeprom.begin() + 24);
-                std::copy(payload.begin(), payload.begin() + 16,
-                          expected.begin());
-                std::copy(payload.begin() + 16, payload.end(),
-                          expected.begin() + 18);
-
-                const std::vector<uint8_t> preserved = {
-                    eeprom[16], eeprom[17]
-                };
+                const std::vector<uint8_t> identifier =
+                    rbcp::read_retry(client, 0xFFFFFF08u, 4);
+                const std::vector<uint8_t> xg_identifier = {0x58, 0x54, 0x43, 0x50};
+                if (identifier != xg_identifier) {
+                    throw Error("mpcx-plan requires a SiTCP-XG target");
+                }
+                bool initialized = false;
+                const std::vector<uint8_t> expected =
+                    sitcp_sitcpxg::eeprom_init::prepare_mpcx_image(
+                        client, eeprom, payload, initialized);
                 field("command", "mpcx-plan");
-                field("preserved FC10..FC11", hex_bytes(preserved));
+                field("EEPROM initialization", initialized
+                      ? "current RAM settings" : "not needed; preserve EEPROM");
+                field("FC10..FC11 source", initialized ? "runtime" : "EEPROM");
+                field("write range", initialized
+                      ? "0xFFFFFC00..0xFFFFFC4F" : "0xFFFFFC00..0xFFFFFC17");
                 field("EEPROM record", hex_bytes(expected));
                 field("status", "NO WRITE PERFORMED");
                 return 0;

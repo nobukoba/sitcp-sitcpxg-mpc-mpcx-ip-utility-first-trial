@@ -1,4 +1,5 @@
 #include "sitcp-sitcpxg-register-report.hpp"
+#include "sitcp-sitcpxg-eeprom-init.hpp"
 #include "sitcp-sitcpxg-rbcp.hpp"
 
 #include <algorithm>
@@ -171,31 +172,39 @@ void set_write_enable(RbcpClient& c, bool enabled) {
 }
 
 std::vector<uint8_t> program(
-    RbcpClient& c, const std::vector<uint8_t>& payload, int type) {
+    RbcpClient& client, const std::vector<uint8_t>& payload, int type,
+    const std::vector<uint8_t>& eeprom) {
     std::vector<uint8_t> image;
     if (type == 1) {
-        image = read_exact(c, EEPROM_BASE, 24);
-        std::copy(payload.begin(), payload.begin() + 16, image.begin());
-        std::copy(payload.begin() + 16, payload.end(), image.begin() + 18);
+        bool initialized = false;
+        image = sitcp_sitcpxg::eeprom_init::prepare_mpcx_image(
+            client, eeprom, payload, initialized);
+        field("EEPROM initialization", initialized
+              ? "current RAM FF00..FF4F -> EEPROM FC00..FC4F (MPCX overlaid)"
+              : "not needed; existing EEPROM settings preserved");
+        field("FC10..FC11 source", initialized ? "runtime" : "EEPROM");
+        field("FC18..FC4F action", initialized
+              ? "copy runtime settings, including FC40..FC41 rate"
+              : "leave unchanged");
     } else {
-        image = read_exact(c, EEPROM_BASE, 0x50);
+        image = eeprom;
         std::copy(payload.begin(), payload.begin() + 6, image.begin() + 0x12);
         std::copy(payload.begin() + 6, payload.end(), image.begin() + 0x40);
     }
 
-    set_write_enable(c, true);
     try {
-        write_exact(c, EEPROM_BASE, image, 16);
+        set_write_enable(client, true);
+        write_exact(client, EEPROM_BASE, image, 16);
     } catch (...) {
         try {
-            set_write_enable(c, false);
+            set_write_enable(client, false);
         } catch (...) {
         }
         throw;
     }
-    set_write_enable(c, false);
+    set_write_enable(client, false);
 
-    const auto actual = read_exact(c, EEPROM_BASE, image.size());
+    const auto actual = read_exact(client, EEPROM_BASE, image.size());
     if (actual != image) {
         size_t i = 0;
         while (i < image.size() && actual[i] == image[i]) {
@@ -291,10 +300,11 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
         }
 
         field("operation", "programming EEPROM");
-        const auto rb = program(client, payload, file_type);
+        const auto rb = program(client, payload, file_type, eeprom);
         if (file_type == 1) {
-            field("preserved FC10..FC11", hex_bytes(rb, 16, 18));
-            field("read-back FC00..FC17", hex_bytes(rb));
+            field("read-back FC10..FC11", hex_bytes(rb, 16, 18));
+            field(rb.size() == 0x50 ? "read-back FC00..FC4F"
+                                    : "read-back FC00..FC17", hex_bytes(rb));
             field("read-back MAC", hex_bytes(rb, 18, 24, ':'));
         } else {
             field("read-back MAC", hex_bytes(rb, 0x12, 0x18, ':'));
@@ -317,7 +327,10 @@ namespace {
 void unified_usage(const char* program) {
     std::cerr
         << "Usage: " << program << " CURRENT_IP MPC_OR_MPCX_FILE [options]\n\n"
-        << "Programs an MPC/MPCX file and optionally changes the SiTCP IP address.\n\n"
+        << "Programs an MPC/MPCX file and optionally changes the SiTCP IP address.\n"
+        << "For uninitialized MPCX EEPROM (FC10 bit7 set), restores settings\n"
+        << "from complete runtime FF00..FF4F before overlaying the MPCX file.\n"
+        << "If runtime cannot be read, stops before writing; no guessed defaults.\n\n"
         << "Options:\n"
         << "  --set-eeprom-ip IP   Set EEPROM/default IP address\n"
         << "  --set-current-ip IP  Set current/runtime IP address\n"

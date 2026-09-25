@@ -46,6 +46,16 @@ class Device:
                 self.put(address, packet[8:])
             data = bytes(self.memory.get(address + i, 0) for i in range(length))
             status = command | 8
+            if command == 0x80 and address == 0xFFFFFC20:
+                if self.fault == 'write_bus':
+                    status |= 1
+                if self.fault == 'write_timeout':
+                    continue
+                if self.fault == 'verify_mismatch':
+                    self.memory[address] ^= 1
+            if command == 0x80 and address == 0xFFFFFCFF and packet[8:] == b'\x00':
+                if self.fault == 'enable_timeout':
+                    continue
             if address <= 0xFFFFFF48 < address + length and self.fault == 'bus':
                 status |= 1
             if self.fault == 'rate' and address <= 0xFFFFFF41 < address + length:

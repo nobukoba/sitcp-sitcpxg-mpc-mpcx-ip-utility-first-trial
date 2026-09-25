@@ -134,11 +134,13 @@ SiTCP-XG:
 
 ```text
 payload[0:16]  -> FC00..FC0F
-FC10..FC11     -> preserve current device bytes
+FC10..FC11     -> preserve EEPROM bytes unless initialization is required
 payload[16:22] -> FC12..FC17
 ```
 
-The final six payload bytes correspond to the target MAC in the verified pair. FC10..FC11 are not fixed constants and must be preserved.
+The final six payload bytes correspond to the target MAC in the verified pair.
+FC10..FC11 are not fixed constants: preserve EEPROM for ordinary programming;
+use runtime bytes for initialization (see the initialization section below).
 
 Normal SiTCP:
 
@@ -190,7 +192,7 @@ According to SiTCP-XG Manual 1.8.1, disconnect timeout value `N` represents
 Mbps in 1-Mbps units. Values outside that range should be reported as such,
 not interpreted as a normal configured rate.
 
-For MPCX programming, the verified 22-byte payload mapping changes only
+For MPCX programming on an already initialized EEPROM, the verified 22-byte payload mapping changes only
 `FC00..FC0F` and `FC12..FC17`; `FC10..FC11` are preserved. The writer
 must also preserve `FC18` and later configuration bytes. In particular,
 different values observed at FC20/FC2A/FC40 on different SiTCP-XG boards are
@@ -233,8 +235,9 @@ The public XG register map documents `FC40..FC41` as the EEPROM initial
 value for the transmission-rate register, with a documented range of
 1..10000.  The observed raw value `0x83A8` is 33704 and is outside that
 range.  Do not report it as an effective rate of 33704 Mbps.  More
-importantly, do not normalize, clear, or replace `FC40..FC4F` during MPCX
-programming.  The verified MPCX mapping does not require writing this area.
+do not normalize, clear, or replace `FC40..FC4F` during ordinary MPCX
+programming. Initialization selected by FC10 bit7 is the explicit exception:
+it copies runtime settings through FC4F before overlaying the MPCX payload.
 
 A plausible history is that normal-MPC-formatted data was written to this
 area before a later MPCX programming operation.  This remains a hypothesis,
@@ -242,8 +245,10 @@ not a verified fact.
 
 ## MPC/MPCX write sequence
 
-1. Read the current EEPROM image needed for the target generation.
-2. Preserve bytes that must not be replaced.
+1. Read the current EEPROM image and independently detect the target generation.
+2. For MPCX, prepare either the 24-byte preservation image or the complete
+   80-byte RAM initialization image as described below. For MPC, retain the
+   existing mapping and preservation behavior.
 3. Release EEPROM write protection.
 4. Write the image in 16-byte blocks.
 5. Restore protection, including error paths where possible.
@@ -312,7 +317,8 @@ Hardware-destructive tests should only be run on a controlled target where recov
 ### MPC/MPCX
 
 - verify exact semantic meaning of all license bytes;
-- determine the meaning of preserved XG FC10..FC11 bytes;
+- investigate remaining reserved FC11 semantics; FC10 bit7 initialization
+  selection is now supported by static analysis;
 - compare the C++ readers/command against known hardware and the previous Python implementation.
 
 ### IP utility
@@ -371,3 +377,57 @@ values, invalid rates, short reads, byte recovery after block bus errors,
 unreadable runtime/EEPROM bytes, missing rate bytes, read-only traffic, and both
 writer before/after views with EEPROM protection restored. They do not replace
 physical-device validation. Python is needed only for these tests, not the CLI.
+
+## MPCX initialization: source and limits (2026-09-26)
+
+Public guide: [SiTCP MPC Writer XG User Guide, section 3.3](https://www.bbtech.co.jp/download-files/sitcp/SiTCP-MPC-Writer-XG-en.0.1.1.pdf)
+reports RAM-based initialization or built-in defaults depending on RAM access.
+It does not define byte ranges or distinguish all internal write paths.
+[SiTCP-XG manual, sections 4.1 and 6](https://www.bbtech.co.jp/download-files/sitcp/SiTCPXG_Manual_1.2_E_20201228.pdf)
+maps runtime FF10..FF4F to EEPROM FC10..FC4F.
+
+Static analysis used the official distribution
+`sitcpmpcwritexg.win.0.4.1-2-gc782.zip`, downloaded from the BBT download page.
+The SHA-256 of `SiTcpMpcWriteXG.exe` is
+`0c01fa932830f74fc996dda56f81cea8c3fa11cd222d1b6f8f6212c0294294a4`.
+The executable and disassembly are not repository deliverables.
+
+Observed x86 virtual addresses:
+
+- `0x40a0a0..0x40a0e0`: reads FC10 and returns bit7 as initialization state.
+- `0x402fe7..0x40304f`: reads 80 bytes at FF00; records FC10 bit7 and
+  checks the XG identifier in that RAM image.
+- `0x403180..0x403224`: retains RAM for initialization; otherwise loads the
+  80-byte EEPROM image. RAM read failure returns failure on this XG path.
+- `0x408f81..0x40903a`: overlays 16 payload bytes at offset 0 and 6 at
+  offset 0x12, selects 80 bytes when initializing versus 24 when preserving,
+  and writes to FC00.
+- `0x40928f..0x4093a6`: also attempts optional extension reads FF50..FF7F
+  in 16-byte blocks and writes corresponding EEPROM blocks if readable.
+  This extension behavior is intentionally not implemented in the custom tool.
+- The fixed-default branch at `0x407c7f..0x407cef` is in the legacy normal
+  SiTCP writer: it reads 40 bytes at FF18, or uses a table at `0x417bc0`.
+  That is not evidence for a SiTCP-XG fallback table. The earlier broad claim
+  that the MPCX path always has a built-in default fallback was unsupported.
+
+Implemented policy: for XG with FC10 bit7 set, obtain all 80 RAM bytes before
+any write, verify its identifier/reset state, overlay the supplied MPCX file,
+and write/verify FC00..FC4F. This includes the rate and reserved bytes in the
+verified 80-byte copy; no rate normalization occurs. A failure to obtain the
+image aborts before enabling writes. XG with bit7 clear retains the existing
+24-byte path, even if the rate looks invalid. Normal MPC writes are unchanged.
+The writer and `mpcx-plan` share image preparation. `verify` still checks the
+license payload only, whereas the writer verifies every byte it programs.
+
+Additional safety differences from the official GUI are exact independent XG
+identifier validation, runtime RESET-bit rejection, 16-byte write chunks,
+mandatory read-back verification, and protection restoration on error. The
+write-enable operation itself is inside the cleanup scope so a lost enable ACK
+still triggers a protection attempt. No destructive write is retried.
+
+Tests in `tests/test_mpcx_initialization.py` use synthetic payloads and local
+UDP emulation: clear-then-write restoration of every image byte (including
+FC40), preservation without initialization, bit7 selection, missing RAM,
+RESET-bit rejection, type mismatch, explicit IP override order, failed/lost
+write ACKs, lost enable ACK, and read-back mismatch. These are not real-hardware
+verification or proof of complete equivalence to all official-tool versions.
