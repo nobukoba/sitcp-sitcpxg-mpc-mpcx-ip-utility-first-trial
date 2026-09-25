@@ -46,7 +46,13 @@ class Device:
                 self.put(address, packet[8:])
             data = bytes(self.memory.get(address + i, 0) for i in range(length))
             status = command | 8
-            if address == 0xFFFFFF48 and self.fault == 'bus':
+            if address <= 0xFFFFFF48 < address + length and self.fault == 'bus':
+                status |= 1
+            if self.fault == 'rate' and address <= 0xFFFFFF41 < address + length:
+                status |= 1
+            if self.fault == 'eeprom' and address <= 0xFFFFFC40 < address + length:
+                status |= 1
+            if self.fault == 'block' and length == 8 and address == 0xFFFFFF40:
                 status |= 1
             if address == 0xFFFFFF48 and self.fault == 'short':
                 data = data[:-1]
@@ -116,6 +122,55 @@ class ReportTests(unittest.TestCase):
                 self.assertNotIn('READ OK', result.stdout)
             finally:
                 device.close()
+
+    def test_partial_register_reports(self):
+        for fault, address in (('bus', '0xFFFFFF48'), ('rate', '0xFFFFFF41'),
+                               ('eeprom', '0xFFFFFC40')):
+            for program, args in (
+                ('mpc-mpcx-ip-reader', ['127.0.0.1']),
+                ('mpc-mpcx-ip-command', ['read', '127.0.0.1']),
+                ('mpc-mpcx-ip-command', ['ip-read', '127.0.0.1']),
+            ):
+                device = Device(fault=fault)
+                try:
+                    result = device.run(program, *args)
+                    self.assertEqual(result.returncode, 3, result.stderr)
+                    self.assertIn(address, result.stderr)
+                    self.assertIn('PARTIAL', result.stdout)
+                    self.assertIn('raw EEPROM FC00..FC4F:', result.stdout)
+                    self.assertIn('current IP          : 127.0.0.1', result.stdout)
+                    self.assertIn('??', result.stdout)
+                    if fault == 'rate':
+                        runtime = result.stdout.split('EEPROM (0xFFFFFC00')[0]
+                        self.assertIn('transmission rate   : unavailable', runtime)
+                        self.assertNotIn('10000 (0x2710)', runtime)
+                        self.assertIn('FFFFFF40: 27 ?? 42 43 44 45 46 47', runtime)
+                    if fault == 'eeprom':
+                        self.assertIn('FFFFFC40: ?? E8 42 43', result.stdout)
+                    self.assertTrue(all(req[0] == 0xC0 for req in device.requests))
+                finally:
+                    device.close()
+
+    def test_block_error_byte_recovery(self):
+        device = Device(fault='block')
+        try:
+            result = device.run('mpc-mpcx-ip-reader', '127.0.0.1')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.check_dump(result.stdout, device)
+            self.assertIn('COMPLETE', result.stdout)
+        finally:
+            device.close()
+
+    def test_partial_diagnostics_do_not_block_writer(self):
+        device = Device(fault='rate')
+        try:
+            result = device.run('mpc-mpcx-ip-command', 'ip-write', '127.0.0.1', '192.0.2.20')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.count('PARTIAL'), 2)
+            self.assertIn('WRITE/VERIFY OK', result.stdout)
+            self.assertEqual(device.memory[0xFFFFFCFF], 255)
+        finally:
+            device.close()
 
     def test_writer_before_after(self):
         for xg in (False, True):

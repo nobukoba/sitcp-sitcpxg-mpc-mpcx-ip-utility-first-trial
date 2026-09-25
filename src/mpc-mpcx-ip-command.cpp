@@ -79,8 +79,9 @@ int main(int argc, char** argv) {
             uint16_t port = network_config::DEFAULT_PORT;
             double timeout = network_config::DEFAULT_TIMEOUT;
             parse_common_options(argc, argv, 3, port, timeout);
-            sitcp_sitcpxg::register_report::show(argv[2], port, timeout);
-            return 0;
+            const bool complete =
+                sitcp_sitcpxg::register_report::show(argv[2], port, timeout);
+            return complete ? 0 : 3;
         }
 
         if (command == "ip-write") {
@@ -161,9 +162,9 @@ int main(int argc, char** argv) {
             double timeout = network_config::DEFAULT_TIMEOUT;
             parse_common_options(argc, argv, 3, port, timeout);
 
-            sitcp_sitcpxg::register_report::show(argv[2], port, timeout);
-            std::cout << "status               : READ OK\n";
-            return 0;
+            const bool complete =
+                sitcp_sitcpxg::register_report::show(argv[2], port, timeout);
+            return complete ? 0 : 3;
         }
 
         if (command == "write") {

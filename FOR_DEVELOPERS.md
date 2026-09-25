@@ -346,10 +346,17 @@ are decimal plus uppercase zero-padded hex; converted timeout units remain
 visible. Out-of-range rates retain their raw value without claiming Mbps.
 Normal SiTCP retains raw dumps without applying the XG parameter map.
 
-The full report requires all 80 runtime bytes to be readable. A rejected or
-short read fails explicitly; no missing byte is silently zero-filled. In
-particular, older SiTCP maps may reserve FF40..FF4F. No writes to that tail are
-introduced. The existing EEPROM programming and protection path is unchanged.
+A diagnostic block bus error triggers byte-by-byte reads of that block. Each
+rejected byte is marked unreadable and printed as `??`, with its address on
+stderr. Only complete fields/payloads are decoded. This supports maps with
+reserved holes, including runtime FF40..FF4F, without suppressing other bytes
+or EEPROM output. All requests remain within the 80-byte window. Short replies
+and timeouts remain fatal and include the request address.
+
+Read views return 3 for PARTIAL, 0 for COMPLETE, or 1 for fatal errors. Writer
+views label partial diagnostic reports but keep the existing mandatory
+programming/read-back verification and write-protection path. No writes to the
+runtime tail are introduced.
 
 Validation:
 
@@ -360,6 +367,7 @@ python3 tests/test_register_report.py
 
 The tests use a local UDP RBCP simulator with synthetic data, checking all dump
 bytes and source separation, both generations, decimal/hex rate and timeout
-values, invalid rates, short reads, bus errors, read-only traffic, and both
+values, invalid rates, short reads, byte recovery after block bus errors,
+unreadable runtime/EEPROM bytes, missing rate bytes, read-only traffic, and both
 writer before/after views with EEPROM protection restored. They do not replace
 physical-device validation. Python is needed only for these tests, not the CLI.

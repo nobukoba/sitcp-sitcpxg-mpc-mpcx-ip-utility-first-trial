@@ -62,9 +62,9 @@ int main(int argc, char** argv) {
             }
         }
 
-        sitcp_sitcpxg::register_report::show(host, port, timeout);
-        std::cout << "status               : READ OK\n";
-        return 0;
+        const bool complete =
+            sitcp_sitcpxg::register_report::show(host, port, timeout);
+        return complete ? 0 : 3;
     } catch (const std::exception& error) {
         std::cerr << "ERROR: " << error.what() << '\n';
         return 1;

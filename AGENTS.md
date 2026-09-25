@@ -135,6 +135,10 @@ Keep these documents synchronized with implementation changes:
   retain units and conventional IP/MAC notation. Raw byte dumps remain hex.
 - Decode each region from its own bytes. Only apply the XG parameter map after
   exact identifier detection, never to normal SiTCP license bytes.
-- Incomplete or unsupported full-range reads must fail explicitly, not invent
-  bytes or report READ OK. Keep standalone IP-only commands compact.
+- Diagnostic block bus errors must fall back to byte reads, preserve readable
+  data, mark rejected bytes `??`, and report their addresses. Decode only fields
+  whose bytes are all readable. Read views return 3 for partial reports; never
+  invent bytes or claim a complete read. Timeouts/short replies remain fatal.
+- Partial diagnostic bus errors must not block the existing verified writer
+  path. Keep standalone IP-only commands compact.
 - Run `python3 tests/test_register_report.py` after changing diagnostic reports.

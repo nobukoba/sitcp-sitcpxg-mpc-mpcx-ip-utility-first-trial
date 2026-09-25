@@ -19,16 +19,59 @@ constexpr uint32_t EEPROM_BASE = 0xFFFFFC00u;
 constexpr uint32_t XG_IDENTIFIER = 0xFFFFFF08u;
 constexpr int FIELD_WIDTH = 20;
 
-inline std::vector<uint8_t> read_exact(rbcp::Client& client, uint32_t address,
-                                size_t length) {
-    std::vector<uint8_t> data;
-    for (size_t offset = 0; offset < length; offset += 8) {
-        const size_t chunk_size = std::min<size_t>(8, length - offset);
-        const std::vector<uint8_t> block = rbcp::read_retry(
-            client, address + static_cast<uint32_t>(offset), chunk_size);
-        data.insert(data.end(), block.begin(), block.end());
+struct RegisterImage {
+    std::vector<uint8_t> bytes;
+    std::vector<bool> readable;
+
+    explicit RegisterImage(size_t length)
+        : bytes(length, 0), readable(length, false) {}
+
+    bool has(size_t offset, size_t length) const {
+        for (size_t i = offset; i < offset + length; ++i) {
+            if (!readable.at(i)) {
+                return false;
+            }
+        }
+        return true;
     }
-    return data;
+};
+
+inline std::string address_string(uint32_t address) {
+    std::ostringstream output;
+    output << "0x" << std::hex << std::uppercase
+           << std::setfill('0') << std::setw(8) << address;
+    return output.str();
+}
+
+inline RegisterImage read_image(rbcp::Client& client, uint32_t base) {
+    RegisterImage image(80);
+    for (size_t offset = 0; offset < image.bytes.size(); offset += 8) {
+        try {
+            const std::vector<uint8_t> block = rbcp::read_retry(
+                client, base + static_cast<uint32_t>(offset), 8);
+            std::copy(block.begin(), block.end(), image.bytes.begin() + offset);
+            std::fill(image.readable.begin() + offset,
+                      image.readable.begin() + offset + 8, true);
+        } catch (const rbcp::BusError&) {
+            // A block may cross a reserved byte. Recover each readable byte.
+            for (size_t i = offset; i < offset + 8; ++i) {
+                const uint32_t address = base + static_cast<uint32_t>(i);
+                try {
+                    image.bytes[i] = rbcp::read_retry(client, address, 1).at(0);
+                    image.readable[i] = true;
+                } catch (const rbcp::BusError&) {
+                    std::cerr << "WARNING: RBCP bus error at "
+                              << address_string(address) << " (shown as unreadable bytes)\n";
+                } catch (const rbcp::Error& error) {
+                    throw rbcp::Error(address_string(address) + ": " + error.what());
+                }
+            }
+        } catch (const rbcp::Error& error) {
+            throw rbcp::Error(address_string(base + static_cast<uint32_t>(offset)) +
+                              ": " + error.what());
+        }
+    }
+    return image;
 }
 
 inline std::vector<uint8_t> reconstruct_mpcx_payload(
@@ -92,53 +135,63 @@ inline std::string decimal_hex(uint32_t value, int width = 4) {
     return output.str();
 }
 
-inline void show_xg_parameters(const std::vector<uint8_t>& registers,
-                               const std::string& region) {
-    const uint16_t disconnect_timeout = be16(registers, 0x2A);
-    const double disconnect_seconds =
-        (static_cast<double>(disconnect_timeout) + 1.0) * 0.256;
-    const uint16_t msl = be16(registers, 0x2C);
+inline std::string numeric_value(const RegisterImage& image, size_t offset,
+                                 const std::string& unit = "") {
+    return image.has(offset, 2)
+        ? decimal_hex(be16(image.bytes, offset)) + unit
+        : "unavailable (RBCP bus error)";
+}
+
+inline std::string mac_value(const RegisterImage& image, size_t offset) {
+    return image.has(offset, 6) ? format_mac(image.bytes, offset)
+                              : "unavailable (RBCP bus error)";
+}
+
+inline std::string ip_value(const RegisterImage& image, size_t offset) {
+    return image.has(offset, 4) ? format_ipv4(image.bytes, offset)
+                              : "unavailable (RBCP bus error)";
+}
+
+inline void show_xg_parameters(const RegisterImage& image) {
+    field("TCP port", numeric_value(image, 0x1C));
+    field("TCP MSS", numeric_value(image, 0x20, " bytes"));
+    field("RBCP UDP port", numeric_value(image, 0x22));
+    field("keepalive nonempty", numeric_value(image, 0x24, " ms"));
+    field("keepalive empty", numeric_value(image, 0x26, " ms"));
+    field("connect timeout", numeric_value(image, 0x28, " ms"));
 
     std::ostringstream disconnect;
-    disconnect << decimal_hex(disconnect_timeout) << " ("
-               << std::fixed << std::setprecision(3)
-               << disconnect_seconds << " s, "
-               << std::setprecision(2)
-               << disconnect_seconds / 60.0 << " min)";
-
-    std::ostringstream msl_value;
-    msl_value << decimal_hex(msl) << " ("
-              << std::fixed << std::setprecision(1)
-              << static_cast<double>(msl) * 0.5 << " ms)";
-
-    field("TCP port", decimal_hex(be16(registers, 0x1C)));
-    field("TCP MSS", decimal_hex(be16(registers, 0x20)) + " bytes");
-    field("RBCP UDP port", decimal_hex(be16(registers, 0x22)));
-    field("keepalive nonempty",
-          decimal_hex(be16(registers, 0x24)) + " ms");
-    field("keepalive empty",
-          decimal_hex(be16(registers, 0x26)) + " ms");
-    field("connect timeout",
-          decimal_hex(be16(registers, 0x28)) + " ms");
+    disconnect << numeric_value(image, 0x2A);
+    if (image.has(0x2A, 2)) {
+        const double seconds = (be16(image.bytes, 0x2A) + 1.0) * 0.256;
+        disconnect << " (" << std::fixed << std::setprecision(3)
+                   << seconds << " s, " << std::setprecision(2)
+                   << seconds / 60.0 << " min)";
+    }
     field("disconnect timeout", disconnect.str());
-    field("TCP MSL", msl_value.str());
-    field("retransmission time",
-          decimal_hex(be16(registers, 0x2E)) + " ms");
-    field("server MAC", format_mac(registers, 0x32));
-    field("server IP", format_ipv4(registers, 0x38));
-    field("server TCP port", decimal_hex(be16(registers, 0x3C)));
-    const uint16_t transmission_rate = be16(registers, 0x40);
-    if (transmission_rate >= 1 && transmission_rate <= 10000) {
-        field("transmission rate",
-              decimal_hex(transmission_rate) + " Mbps");
+
+    std::ostringstream msl;
+    msl << numeric_value(image, 0x2C);
+    if (image.has(0x2C, 2)) {
+        msl << " (" << std::fixed << std::setprecision(1)
+            << be16(image.bytes, 0x2C) * 0.5 << " ms)";
+    }
+    field("TCP MSL", msl.str());
+    field("retransmission time", numeric_value(image, 0x2E, " ms"));
+    field("server MAC", mac_value(image, 0x32));
+    field("server IP", ip_value(image, 0x38));
+    field("server TCP port", numeric_value(image, 0x3C));
+    if (!image.has(0x40, 2)) {
+        field("transmission rate", "unavailable (RBCP bus error)");
     } else {
-        field("transmission rate raw",
-              decimal_hex(transmission_rate) +
-              " (outside documented range 1..10000)");
-        field(region + "40.." + region + "4F",
-              hex_bytes(registers, 0x40, 0x50));
-        field("rate note",
-              "raw value; may contain data unrelated to XG rate");
+        const uint16_t rate = be16(image.bytes, 0x40);
+        if (rate >= 1 && rate <= 10000) {
+            field("transmission rate", decimal_hex(rate) + " Mbps");
+        } else {
+            field("transmission rate raw", decimal_hex(rate) +
+                  " (outside documented range 1..10000)");
+            field("rate note", "raw value; may contain data unrelated to XG rate");
+        }
     }
 }
 
@@ -178,60 +231,74 @@ inline int detect_target(rbcp::Client& client, std::string& reason) {
     }
 }
 
-inline void dump(uint32_t base, const std::vector<uint8_t>& data) {
-    for (size_t offset = 0; offset < data.size(); offset += 16) {
+inline void dump(uint32_t base, const RegisterImage& image) {
+    for (size_t offset = 0; offset < image.bytes.size(); offset += 16) {
         std::ostringstream line;
         line << std::hex << std::uppercase << std::setfill('0')
-             << std::setw(8) << (base + offset) << ": "
-             << hex_bytes(data, offset, offset + 16);
+             << std::setw(8) << (base + offset) << ":";
+        for (size_t i = offset; i < offset + 16; ++i) {
+            line << ' ';
+            if (image.readable[i]) {
+                line << std::setw(2) << static_cast<unsigned>(image.bytes[i]);
+            } else {
+                line << "??";
+            }
+        }
         std::cout << line.str() << '\n';
     }
 }
 
-inline void show(const std::string& host, uint16_t port, double timeout) {
+inline bool show(const std::string& host, uint16_t port, double timeout) {
     rbcp::Client client(host, port, timeout);
     std::string detection;
     const int target_type = detect_target(client, detection);
-    const std::vector<uint8_t> runtime = read_exact(client, 0xFFFFFF00u, 0x50);
-    const std::vector<uint8_t> eeprom = read_exact(client, EEPROM_BASE, 0x50);
+    const RegisterImage runtime = read_image(client, 0xFFFFFF00u);
+    const RegisterImage eeprom = read_image(client, EEPROM_BASE);
 
     field("target", host + ":" + std::to_string(port));
     field("detected type", type_name(target_type));
     field("detection", detection);
     std::cout << "\nRuntime registers (0xFFFFFF00..0xFFFFFF4F, 80 bytes):\n";
-    field("current MAC", format_mac(runtime, 0x12));
-    field("current IP", format_ipv4(runtime, 0x18));
+    field("current MAC", mac_value(runtime, 0x12));
+    field("current IP", ip_value(runtime, 0x18));
     if (target_type == 1) {
-        show_xg_parameters(runtime, "FF");
+        show_xg_parameters(runtime);
     }
     std::cout << "raw runtime FF00..FF4F:\n";
     dump(0xFFFFFF00u, runtime);
 
     std::cout << "\nEEPROM (0xFFFFFC00..0xFFFFFC4F, 80 bytes):\n";
-    field("EEPROM MAC", format_mac(eeprom, 0x12));
-    field("EEPROM IP", format_ipv4(eeprom, 0x18));
+    field("EEPROM MAC", mac_value(eeprom, 0x12));
+    field("EEPROM IP", ip_value(eeprom, 0x18));
     if (target_type == 1) {
-        show_xg_parameters(eeprom, "FC");
+        show_xg_parameters(eeprom);
     }
     std::cout << "raw EEPROM FC00..FC4F:\n";
     dump(EEPROM_BASE, eeprom);
 
     std::cout << "\nMPC/MPCX information (EEPROM):\n";
     std::vector<uint8_t> payload;
-    if (target_type == 1) {
-        payload = reconstruct_mpcx_payload(eeprom);
-    } else if (target_type == 2) {
-        payload = reconstruct_mpc_payload(eeprom);
+    if (target_type == 1 && eeprom.has(0, 16) && eeprom.has(18, 6)) {
+        payload = reconstruct_mpcx_payload(eeprom.bytes);
+    } else if (target_type == 2 && eeprom.has(0x12, 6) && eeprom.has(0x40, 16)) {
+        payload = reconstruct_mpc_payload(eeprom.bytes);
     }
     if (!payload.empty()) {
         field("reconstructed payload", hex_bytes(payload));
+    } else {
+        field("reconstructed payload", "unavailable");
     }
-    field("MAC", format_mac(eeprom, 0x12));
+    field("MAC", mac_value(eeprom, 0x12));
     if (target_type == 1) {
-        field("MPCX FC00..FC0F", hex_bytes(eeprom, 0, 16));
+        field("MPCX FC00..FC0F", eeprom.has(0, 16)
+              ? hex_bytes(eeprom.bytes, 0, 16) : "unavailable");
     } else if (target_type == 2) {
-        field("MPC FC40..FC4F", hex_bytes(eeprom, 0x40, 0x50));
+        field("MPC FC40..FC4F", eeprom.has(0x40, 16)
+              ? hex_bytes(eeprom.bytes, 0x40, 0x50) : "unavailable");
     }
+    const bool complete = runtime.has(0, 80) && eeprom.has(0, 80);
+    field("register report", complete ? "COMPLETE" : "PARTIAL (?? = unreadable)");
+    return complete;
 }
 
 }  // namespace register_report

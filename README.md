@@ -75,9 +75,17 @@ The same report is available with:
 
 The full report requests all 80 bytes, including the runtime tail at
 `0xFFFFFF40..0xFFFFFF4F`. Some SiTCP versions reserve this region or reject
-access; a bus error or incomplete read is reported as an error, not a complete
-successful dump. Use the low-level `rbcp-read` command for a device-specific
-shorter range when necessary.
+access. On a block bus error, the diagnostic report reads that block byte by
+byte, displays readable values, and marks rejected bytes as `??`. Warnings
+identify each rejected address. Fields with missing bytes are `unavailable`;
+they are never decoded using placeholder zeros. Runtime and EEPROM remain
+separate, and readable EEPROM information is still displayed.
+
+Read commands return `0` for a complete report, `3` for a partial report, and
+`1` for a fatal error such as a timeout or short reply. Before/after diagnostic
+bus errors do not prevent a writer from using its existing verified programming
+path; `PARTIAL` describes the report, while `WRITE/VERIFY OK` describes the
+write and read-back verification.
 
 The reader determines the device generation first from the documented SiTCP-XG Identifier register at `0xFFFFFF08..0xFFFFFF0B`. An exact value of `0x58544350` identifies SiTCP-XG. MPC/MPCX payload classification is handled separately and is not used to determine the device generation.
 
