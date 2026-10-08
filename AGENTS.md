@@ -122,7 +122,7 @@ Never commit proprietary MPC/MPCX files, official proprietary executables/librar
 
 Keep these documents synchronized with implementation changes:
 
-- `README.md`: user-facing quick start and command usage.
+- `README.md` and `README.ja.md`: English and Japanese user-facing quick start and command usage. Keep both versions synchronized, preserve identical command examples, and maintain the `Language: English | 日本語` navigation at the top of each file.
 - `FOR_DEVELOPERS.md`: architecture, build/development notes, testing, implementation status, technical evidence, and reconstructed protocol/register behavior.
 - `AGENTS.md`: constraints future automated development must preserve.
 
