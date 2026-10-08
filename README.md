@@ -115,17 +115,13 @@ Writer options:
 
 When both IP options are given, EEPROM IP is written first and current/runtime IP is changed last. This keeps the original address reachable until all operations that require it have finished. After a current/runtime IP change, the writer reconnects to the new IP and performs read-back verification. It does not blindly retry a timed-out destructive current-IP write because the address may already have changed before the acknowledgement is received.
 
-The writer prints five nonempty lines: runtime and EEPROM MAC/IP before (two lines),
-after (two lines), then a blank line and
-`Success! All operations completed and verified.`, followed by another blank line.
-Use one space after `before:` and two after `after:` to align the fields. IPs retain hexadecimal
-notation. Success is printed only after all requested operations and verification complete. Use the reader for full register dumps. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
+The writer displays runtime and EEPROM MAC/IP before and after the operation. Success is printed only after all requested operations and verification complete. Use the reader for full register dumps. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
 
 ### EEPROM clearing details
 
 This erases license and saved settings in EEPROM `0xFFFFFC00..0xFFFFFC7F`
 (128 bytes) to `FF`, restores write protection, and verifies every erased byte.
-It displays compact before/after MAC/IP values and a success message in five nonempty lines plus a blank separator. It does not program
+It displays compact before/after MAC/IP values and a success message. It does not program
 an MPC/MPCX file, initialize from RAM, or change runtime/IP registers. Do not
 combine `--clear` with a file, `--set-eeprom-ip`, or `--set-current-ip`.
 `--port` and `--timeout` are supported. Clearing is off by default. Reprogram
@@ -243,7 +239,7 @@ ip-read IP [--port N] [--timeout SEC]
 ip-write CURRENT_IP NEW_IP [--eeprom|--current] [--port N] [--timeout SEC]
 ```
 
-`read` and `ip-read` display the same full runtime/EEPROM report. `ip-write` and the standalone IP writer print five-nonempty-line before/after MAC/IP and result summaries. The standalone IP reader retains its compact MAC/IP view. `ip-write` defaults to EEPROM and accepts `--current` for the runtime/current address.
+`read` and `ip-read` display the same full runtime/EEPROM report. `ip-write` and the standalone IP writer print before/after MAC/IP and result summaries. The standalone IP reader retains its compact MAC/IP view. `ip-write` defaults to EEPROM and accepts `--current` for the runtime/current address.
 
 ### Build requirements
 
