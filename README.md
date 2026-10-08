@@ -1,5 +1,7 @@
 # SiTCP / SiTCP-XG MPC / MPCX / IP Utility (first trial)
 
+**Language: English | [日本語](README.ja.md)**
+
 Experimental C++11 utilities for SiTCP and SiTCP-XG configuration over RBCP.
 
 ## Commands
