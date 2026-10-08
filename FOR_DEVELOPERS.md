@@ -67,6 +67,27 @@ IP utility domain:
 
 A common RBCP transport helper may be shared, but MPC/MPCX payload logic must not leak into the standalone IP-only commands.
 
+## Source formatting
+
+Source files should use conventional readable C++ formatting. Avoid compressed one-line implementations; put control-flow blocks and logically separate statements on separate lines. Long expressions should be wrapped rather than packed into a single line.
+
+## Implementation notes
+
+The public commands use shared transport/network/MPC-MPCX code in `src/sitcp-sitcpxg-rbcp.hpp`, `src/sitcp-sitcpxg-network-config.hpp`, and `src/sitcp-sitcpxg-mpc-mpcx.hpp`. MPC/MPCX payload handling and IP register handling remain logically separated internally even though some commands expose both functions.
+
+IP/MAC register addresses used by the implementation are:
+
+```text
+current MAC : 0xFFFFFF12..0xFFFFFF17
+current IP  : 0xFFFFFF18..0xFFFFFF1B
+EEPROM MAC  : 0xFFFFFC12..0xFFFFFC17
+EEPROM IP   : 0xFFFFFC18..0xFFFFFC1B
+EEPROM WE   : 0xFFFFFCFF
+```
+
+This is an experimental implementation and is not an official Bee Beans Technologies utility. Proprietary executables, libraries, and user-specific MPC/MPCX files are not included.
+
+
 ## Public references
 
 For generation detection, the authoritative public reference is the Bee Beans Technologies SiTCP-XG manual, section 4.2.3. It defines the read-only SiTCP-XG Identifier register as `0x58544350`.
