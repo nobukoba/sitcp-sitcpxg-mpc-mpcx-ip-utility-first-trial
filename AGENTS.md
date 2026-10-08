@@ -128,6 +128,8 @@ Keep these documents synchronized with implementation changes:
 
 Keep README content focused on installation and command usage, with direct Bee Beans Technologies reference links. Put source-formatting rules, shared-header architecture, register maps, and implementation provenance in `FOR_DEVELOPERS.md` or `AGENTS.md`, not the READMEs.
 
+Preserve all unique information when reorganizing documentation: move technical content to its canonical developer section and replace duplicated explanations with links. README translations must retain the same user-facing instructions. Keep detailed byte maps, initialization algorithms, generation detection, diagnostic internals, evidence, and formatting constraints out of README. Preserve user-visible warnings, option semantics, examples, and exit codes there.
+
 ## Development priorities
 
 1. Preserve verified MPC/MPCX EEPROM programming behavior.
