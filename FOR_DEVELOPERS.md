@@ -11,6 +11,9 @@ They may share low-level RBCP transport code, but they must not share domain log
 
 ## Build and compatibility
 
+Build requirements are a C++11 compiler (`g++` or `clang++`), POSIX sockets, and `make`.
+
+
 ```bash
 make
 make install
@@ -27,9 +30,10 @@ README usage examples consistently use the installed copy.
 
 Default installation is local to the checkout:
 
-```text
-./bin/
-```
+| Command | Output location | How to run |
+| --- | --- | --- |
+| `make` | `./src/` (build output) | `./src/mpc-mpcx-ip-reader DEVICE_IP` |
+| `make install` | `./bin/` (installed copy) | `./bin/mpc-mpcx-ip-reader DEVICE_IP` |
 
 Override with, for example:
 
@@ -38,7 +42,9 @@ make install PREFIX=$HOME/.local
 sudo make install PREFIX=/usr/local
 ```
 
-Targets are Linux, macOS, and WSL using POSIX sockets.
+Targets are Linux, macOS, and WSL using POSIX sockets. Both `src/` and `bin/` contain the same five commands after successful installation. `make clean` removes generated executables from `src/` but retains source files and installed copies.
+
+For development without installation, replace the README's `./bin/` prefix with `./src/`, for example `./src/mpc-mpcx-ip-reader DEVICE_IP`. The default `PREFIX` is `$(CURDIR)` and `BINDIR` is `$(PREFIX)/bin`. `make install` builds outdated binaries before copying them.
 
 ## Current programs
 
@@ -69,11 +75,11 @@ A common RBCP transport helper may be shared, but MPC/MPCX payload logic must no
 
 ## Source formatting
 
-Source files should use conventional readable C++ formatting. Avoid compressed one-line implementations; put control-flow blocks and logically separate statements on separate lines. Long expressions should be wrapped rather than packed into a single line.
+See [AGENTS.md — Source formatting](AGENTS.md#source-formatting) for the complete formatting rules.
 
 ## Implementation notes
 
-The public commands use shared transport/network/MPC-MPCX code in `src/sitcp-sitcpxg-rbcp.hpp`, `src/sitcp-sitcpxg-network-config.hpp`, and `src/sitcp-sitcpxg-mpc-mpcx.hpp`. MPC/MPCX payload handling and IP register handling remain logically separated internally even though some commands expose both functions.
+The public commands use shared transport/network/MPC-MPCX code in `src/sitcp-sitcpxg-rbcp.hpp`, `src/sitcp-sitcpxg-network-config.hpp`, and `src/sitcp-sitcpxg-mpc-mpcx.hpp`. MPC/MPCX payload handling and IP register handling remain logically separated internally even though some commands expose both functions. Do not create a generic abstraction that silently mixes MPC/MPCX license layout with IP configuration layout.
 
 IP/MAC register addresses used by the implementation are:
 
@@ -273,6 +279,9 @@ not a verified fact.
 
 ## MPC/MPCX write sequence
 
+When both IP options are given, EEPROM IP is written first and current/runtime IP last, preserving reachability at the original IP until all earlier operations finish. After runtime IP changes, reconnect to the new IP and verify by read-back. A lost acknowledgement may mean the IP has already changed; do not blindly retry the write.
+
+
 1. Read the current EEPROM image and independently detect the target generation.
 2. For MPCX, prepare either the 24-byte preservation image or the complete
    80-byte RAM initialization image as described below. For MPC, retain the
@@ -282,6 +291,26 @@ not a verified fact.
 5. Restore protection, including error paths where possible.
 6. Read the programmed image again.
 7. Compare byte-for-byte and fail on mismatch.
+
+## Advanced command reference
+
+Important subcommands include (MPC_OR_MPCX_FILE means a `.mpc` or `.mpcx` license/configuration file):
+
+```text
+inspect MPC_OR_MPCX_FILE
+mac MPC_OR_MPCX_FILE
+read IP [--port N] [--timeout SEC]
+verify IP FILE [--port N] [--timeout SEC]
+mpcx-plan IP FILE [--port N] [--timeout SEC]
+probe IP ADDRESS [LENGTH] [--port N] [--timeout SEC]
+rbcp-read IP ADDRESS LENGTH [--port N] [--timeout SEC]
+rbcp-write IP ADDRESS HEX-BYTES [--port N] [--timeout SEC]
+clear IP --yes-really-clear [--port N] [--timeout SEC]
+ip-read IP [--port N] [--timeout SEC]
+ip-write CURRENT_IP NEW_IP [--eeprom|--current] [--port N] [--timeout SEC]
+```
+
+`read` and `ip-read` display the same full runtime/EEPROM report. `ip-write` and the standalone IP writer print before/after MAC/IP and result summaries. The standalone IP reader retains its compact MAC/IP view. `ip-write` defaults to EEPROM and accepts `--current` for the runtime/current address.
 
 ## IP utility design
 
@@ -303,10 +332,6 @@ Requirements:
 - writer performs read-back verification;
 - after changing current/runtime IP, reconnect to `NEW_IP` and verify when possible;
 - normal SiTCP and SiTCP-XG behavior must be tested independently.
-
-## Refactoring direction
-
-Shared code is separated into `sitcp-sitcpxg-rbcp.hpp` (RBCP transport), `sitcp-sitcpxg-network-config.hpp` (network configuration), and `sitcp-sitcpxg-mpc-mpcx.hpp` (MPC/MPCX operations). Keep these boundaries explicit; do not create a generic abstraction that silently mixes MPC/MPCX license layout with IP configuration layout.
 
 ## Testing
 
@@ -369,9 +394,15 @@ For verified payload layouts, the embedded MAC address is `payload[0:6]` for nor
 
 ## Runtime / EEPROM diagnostic reports
 
+Compact writer labels use `before: ` and `after:  ` to align MAC/IP fields.
+
+
+The report labels current MAC, current IP, EEPROM MAC, and EEPROM IP in separate Runtime and EEPROM sections, followed by MPC/MPCX information reconstructed from EEPROM. Raw dumps use 16 hexadecimal bytes per row: four runtime rows for normal SiTCP, five for XG, and five EEPROM rows for either generation. MAC addresses use colon-separated hexadecimal notation. Numeric examples include `10000 (0x2710) Mbps` and `4660 (0x1234)`; timeout conversions retain units alongside decimal/hexadecimal raw values. Missing fields are displayed as `unavailable`, never decoded using placeholder zeros.
+
+
 `src/sitcp-sitcpxg-register-report.hpp` supplies the common report used by the
-MPC/MPCX reader and advanced `read` / `ip-read`. It reads runtime FF00..FF3F (64 bytes) for normal SiTCP or FF00..FF4F
-(80 bytes) for SiTCP-XG, plus EEPROM FC00..FC4F (80 bytes) for both. Reads use
+MPC/MPCX reader and advanced `read` / `ip-read`. It reads runtime `0xFFFFFF00..0xFFFFFF3F` (64 bytes) for normal SiTCP or `0xFFFFFF00..0xFFFFFF4F`
+(80 bytes) for SiTCP-XG, plus EEPROM `0xFFFFFC00..0xFFFFFC4F` (80 bytes) for both. Reads use
 8-byte RBCP chunks and separate hex dumps. Identifier timeout aborts range
 selection. The display and completion check use
 the selected runtime length. MAC/IP values come directly from their region's registers, never
@@ -413,6 +444,20 @@ writer before/after views with EEPROM protection restored. They do not replace
 physical-device validation. Python is needed only for these tests, not the CLI.
 
 ## MPCX initialization: source and limits (2026-09-26)
+
+### EEPROM image layout
+
+| EEPROM range | Source when initialization is needed |
+| --- | --- |
+| `FC00..FC0F` | MPCX file, first 16 bytes |
+| `FC10..FC11` | Runtime `FF10..FF11` |
+| `FC12..FC17` | MPCX file, final 6 bytes (MAC) |
+| `FC18..FC4F` | Runtime `FF18..FF4F`, including the transmission rate |
+
+Explicit EEPROM IP overrides are applied after programming; current/runtime IP changes are last, followed by reconnect and read-back verification. Without an EEPROM IP override, initialization saves the current runtime IP, which may be the device's ForceDefault address. It copies runtime values without automatic rate repair. Diagnostic `??` bytes must never be used as programming data. Normal MPC programming is unchanged.
+
+### Evidence and implementation
+
 
 Public guide: [SiTCP MPC Writer XG User Guide, section 3.3](https://www.bbtech.co.jp/download-files/sitcp/SiTCP-MPC-Writer-XG-en.0.1.1.pdf)
 reports RAM-based initialization or built-in defaults depending on RAM access.
@@ -488,11 +533,11 @@ retain EEPROM FC40..FC4F, and report COMPLETE without expected-tail warnings.
 standalone erase operation (default off), not clear-before-programming.
 It requires no license file and rejects file/IP-change combinations before
 network access. No RAM restoration or subsequent file programming is performed.
-The writer displays compact before/after MAC/IP snapshots and the success message in five nonempty lines plus a blank separator.
+For the compact output format, see [Runtime / EEPROM diagnostic reports](#runtime--eeprom-diagnostic-reports).
 
 Both writer `--clear` and advanced `clear IP --yes-really-clear` call the shared
 `src/sitcp-sitcpxg-eeprom-clear.hpp` helper. It enables EEPROM writes, writes FF
-to FC00..FC7F in 16-byte blocks, restores protection, then verifies all 128
+to `0xFFFFFC00..0xFFFFFC7F` in 16-byte blocks, restores protection, then verifies all 128
 bytes in 8-byte reads. An enable/write failure triggers a protection attempt;
 no destructive data write is retried. Verification failure must never print the success message.
 The advanced command retains its existing guard; writer `--clear` itself is
@@ -502,4 +547,4 @@ the explicit clear-only selector. The operation does not write runtime space.
 sequence, unchanged runtime, conflict rejection before device access, failed
 or lost ACKs, read-back mismatch, protection cleanup, and the advanced guard.
 
-Compact writer labels use `before: ` and `after:  ` to align MAC/IP fields.
+
