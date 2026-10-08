@@ -126,6 +126,8 @@ Keep these documents synchronized with implementation changes:
 - `FOR_DEVELOPERS.md`: architecture, build/development notes, testing, implementation status, technical evidence, and reconstructed protocol/register behavior.
 - `AGENTS.md`: constraints future automated development must preserve.
 
+Keep README content focused on installation and command usage, with direct Bee Beans Technologies reference links. Put source-formatting rules, shared-header architecture, register maps, and implementation provenance in `FOR_DEVELOPERS.md` or `AGENTS.md`, not the READMEs.
+
 ## Development priorities
 
 1. Preserve verified MPC/MPCX EEPROM programming behavior.
