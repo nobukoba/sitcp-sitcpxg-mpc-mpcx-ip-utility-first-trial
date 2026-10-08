@@ -288,26 +288,12 @@ With a custom prefix, replace `./bin/` in the examples with your
 chosen `PREFIX/bin/`. For a system installation, use
 `sudo make install PREFIX=/usr/local` (administrator privileges required).
 
-### Source formatting
+### Official links and references
 
-Source files should use conventional readable C++ formatting. Avoid compressed one-line implementations; put control-flow blocks and logically separate statements on separate lines. Long expressions should be wrapped rather than packed into a single line.
-
-### Implementation notes
-
-The public commands use shared transport/network/MPC-MPCX code in `src/sitcp-sitcpxg-rbcp.hpp`, `src/sitcp-sitcpxg-network-config.hpp`, and `src/sitcp-sitcpxg-mpc-mpcx.hpp`. MPC/MPCX payload handling and IP register handling remain logically separated internally even though some commands expose both functions.
-
-IP/MAC register addresses used by the implementation are:
-
-```text
-current MAC : 0xFFFFFF12..0xFFFFFF17
-current IP  : 0xFFFFFF18..0xFFFFFF1B
-EEPROM MAC  : 0xFFFFFC12..0xFFFFFC17
-EEPROM IP   : 0xFFFFFC18..0xFFFFFC1B
-EEPROM WE   : 0xFFFFFCFF
-```
-
-This is an experimental implementation and is not an official Bee Beans Technologies utility. Proprietary executables, libraries, and user-specific MPC/MPCX files are not included.
-
+- [Bee Beans Technologies](https://www.bbtech.co.jp/)
+- [SiTCP / SiTCP-XG software and manuals](https://www.bbtech.co.jp/download-files/sitcp/index_en.html)
+- [SiTCP MPC Writer XG User Guide (English PDF)](https://www.bbtech.co.jp/download-files/sitcp/SiTCP-MPC-Writer-XG-en.0.1.1.pdf)
+- [SiTCP Forum](https://sitcp.bbtech.co.jp/)
 
 ### Documentation
 
