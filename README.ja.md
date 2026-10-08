@@ -241,25 +241,12 @@ make install PREFIX="$HOME/.local"
 
 `$HOME/.local/bin`にPATHを通せば、コマンド名だけで実行できます。独自のprefixを指定した場合、例の`./bin/`を選択した`PREFIX/bin/`に置き換えてください。システム全体へのインストールは`sudo make install PREFIX=/usr/local`で行えます（管理者権限が必要です）。
 
-### ソースの整形
+### 公式リンク・参考資料
 
-C++の一般的で読みやすい書式を使います。1行に圧縮した実装を避け、制御ブロックや論理的に別の文は行を分けます。長い式は適切に改行します。
-
-### 実装の補足
-
-公開コマンドは`src/sitcp-sitcpxg-rbcp.hpp`、`src/sitcp-sitcpxg-network-config.hpp`、`src/sitcp-sitcpxg-mpc-mpcx.hpp`の通信/ネットワーク/MPC-MPCX共通処理を使います。同じコマンドで扱う場合も、MPC/MPCXペイロードとIPレジスタの処理は内部で論理的に分離しています。
-
-使用するIP/MACレジスタは次のとおりです。
-
-```text
-current MAC : 0xFFFFFF12..0xFFFFFF17
-current IP  : 0xFFFFFF18..0xFFFFFF1B
-EEPROM MAC  : 0xFFFFFC12..0xFFFFFC17
-EEPROM IP   : 0xFFFFFC18..0xFFFFFC1B
-EEPROM WE   : 0xFFFFFCFF
-```
-
-試験的な実装であり、Bee Beans Technologiesの公式ユーティリティではありません。専有の実行ファイル、ライブラリ、ユーザー固有のMPC/MPCXファイルは含みません。
+- [Bee Beans Technologies](https://www.bbtech.co.jp/)
+- [SiTCP / SiTCP-XG ソフトウェア・マニュアル](https://www.bbtech.co.jp/download-files/sitcp/index_en.html)
+- [SiTCP MPC Writer XG ユーザーガイド（英語PDF）](https://www.bbtech.co.jp/download-files/sitcp/SiTCP-MPC-Writer-XG-en.0.1.1.pdf)
+- [SiTCP Forum](https://sitcp.bbtech.co.jp/)
 
 ### 関連ドキュメント
 
