@@ -111,11 +111,11 @@ RBCPの既定UDPポートは`4660`、タイムアウトは`3`秒です。`--help
 
 両方のIPオプションを指定すると、EEPROMのIPを先に書き込み、ランタイムIPを最後に変更します。元のアドレスを必要とする処理が終わるまで通信を維持するためです。ランタイムIP変更後は新しいIPへ再接続し、読み戻して検証します。応答を受信する前にIPが変更された可能性があるため、タイムアウトした破壊的な現在IPの書き込みを無条件に再試行しません。
 
-writerの出力は、変更前のランタイム/EEPROM MAC・IPが2行、変更後が2行、空行に続いて`Success! All operations completed and verified.`が1行、最後に空行です。空でない行は計5行です。`before:`の後は1空白、`after:`の後は2空白で表示位置を揃えます。IPの16進表記も維持します。成功表示はすべての操作と検証が完了した場合のみ出ます。全レジスタのダンプはreaderで確認してください。MPC/MPCXの種類は拡張子ではなく22バイトの内容から判定します。
+writerは変更前後のランタイム/EEPROMのMAC・IPを表示し、すべての操作と検証が完了すると成功を表示します。全レジスタのダンプはreaderで確認してください。MPC/MPCXの種類は拡張子ではなく22バイトの内容から判定します。
 
 ### EEPROM消去の詳細
 
-EEPROMの`0xFFFFFC00..0xFFFFFC7F`（128バイト）を`FF`で消去し、書き込み保護を戻して全バイトを検証します。前後のMAC/IPと成功結果を、空でない5行と区切りの空行で表示します。
+EEPROMの`0xFFFFFC00..0xFFFFFC7F`（128バイト）を`FF`で消去し、書き込み保護を戻して全バイトを検証します。前後のMAC/IPと成功結果を表示します。
 
 MPC/MPCXファイルの書き込み、RAMからの初期化、ランタイム/IPレジスタの変更は行いません。`--clear`をファイル、`--set-eeprom-ip`、`--set-current-ip`と組み合わせないでください。`--port`と`--timeout`は指定できます。消去は既定で無効です。通常の起動モードに戻す前に適切なライセンスを再書き込みしてください。
 
@@ -201,7 +201,7 @@ ip-read IP [--port N] [--timeout SEC]
 ip-write CURRENT_IP NEW_IP [--eeprom|--current] [--port N] [--timeout SEC]
 ```
 
-`read`と`ip-read`は同じランタイム/EEPROMの詳細表示を行います。`ip-write`とIP専用writerは、変更前後のMAC/IPと結果を空でない5行で表示します。IP専用readerは簡潔なMAC/IP表示を維持します。`ip-write`の既定の書き込み先はEEPROMです。現在のランタイムIPを変更する場合は`--current`を指定します。
+`read`と`ip-read`は同じランタイム/EEPROMの詳細表示を行います。`ip-write`とIP専用writerは、変更前後のMAC/IPと結果を表示します。IP専用readerは簡潔なMAC/IP表示を維持します。`ip-write`の既定の書き込み先はEEPROMです。現在のランタイムIPを変更する場合は`--current`を指定します。
 
 ### ビルド要件
 
