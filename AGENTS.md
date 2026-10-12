@@ -144,6 +144,16 @@ Preserve all unique information when reorganizing documentation: move technical 
 
 ## Diagnostic report consistency
 
+- Show General, TCP, Client/server, Control and Transmission groups for both
+  normal SiTCP and XG. Retain decimal/hexadecimal values, raw dumps and partial
+  read handling. The standalone IP reader and compact writer output stay compact.
+- Normal server fields start at 30/36/3A; XG uses 32/38/3C. Normal disconnect
+  timeout is N*256 ms; XG is (N+1)*256 ms. Normal 2C is reconnect interval in
+  ms; XG 2C is MSL in 0.5 ms units. Decode control bits per generation.
+- Show normal transmission-rate setting as unsupported, without reading FF40
+  or interpreting its EEPROM license bytes as a rate. Do not present an assumed
+  link speed as a measurement. XG rate is a configured line-rate limit.
+
 - Select diagnostic runtime length by the exact XG identifier, not file suffix
   or EEPROM payload: normal SiTCP reads FF00..FF3F (64 bytes), XG reads
   FF00..FF4F (80 bytes). Never request FF40..FF4F for normal SiTCP reports.
@@ -197,3 +207,37 @@ Preserve all unique information when reorganizing documentation: move technical 
   last with reconnect/read-back verification. Never clear implicitly.
 - Keep public documentation, static-analysis findings, and physical-device
   verification distinct. Run `python3 -m unittest discover -s tests -v`.
+
+## Normal MPC programming compatibility
+
+- Normal MPC must use a separate FC10..FC4F (64-byte) record, after independent
+  generation detection. Do not read or program FC00..FC0F for this writer path.
+- Match the captured legacy writer: control FC10 is always 01, FC11 is retained,
+  payload MAC maps to FC12..FC17 and the remaining 16 bytes to FC40..FC4F.
+- Normal initialization is selected when both EEPROM IP endpoint octets
+  FC18 and FC1B are FF. This is not the MPCX FC10-bit7 condition.
+- On initialization, require complete runtime FF18..FF3F and copy those 40 bytes
+  to FC18..FC3F before overlaying the license. Abort before writes on RAM failure;
+  do not silently apply the official GUI's fixed default-address fallback.
+- Issue the captured single 64-byte normal-MPC data write at FC10, retaining
+  protection cleanup, no destructive retries, and full read-back verification.
+- Retain approximately 500 ms settling between normal-MPC enable/data/protect
+  writes, including before cleanup after an ambiguous data ACK. Do not apply
+  this new pacing to the existing MPCX programming path.
+- Preserve the existing MPCX image preparation and 16-byte chunking.
+- The checked-in official reference contains synthetic data only. Never replace
+  it with a proprietary license or commit the official executable/disassembly.
+- IP-only EEPROM writes must attempt protection restoration even after a lost
+  enable ACK; keep the enable operation inside the cleanup scope.
+- Run `python3 -m unittest discover -s tests -v` after changing these paths.
+
+## Utility-compatible IP programming
+
+- User-requested official Utility compatibility supersedes the previous four-byte IP write policy. Use the shared network helper for all IP write entry points.
+- Read FC00/64 before EEPROM writes; enable FCFF=00, write FC00/17 and FC18/40, restore FCFF=FF, and verify the entire 64-byte image.
+- Read FF00/64 twice before runtime writes; write FF00/17, then FF18/40, reconnect to the requested IP and verify all 64 bytes.
+- Replace only IP bytes in the captured settings image. Preserve every other value, including unchanged license bytes in the EEPROM prefix. Do not parse license payloads or require license files. Leave offsets 11..17 and regions beyond 3F unchanged.
+- Abort on incomplete settings reads before writes. Never retry configuration writes. A runtime prefix failure is fatal; a timeout of the final address-changing block permits read-back at the new IP. Always attempt EEPROM protection cleanup after an enable/data failure.
+- Keep documentation honest: simulator agreement does not establish real-device IP migration or complete packet-for-packet GUI equivalence.
+
+- Reader TCP parameter labels must match the confirmed official Utility strings; keep the Keep Alive enable flag next to both buffer-state timers. Preserve decimal/hex and use a 36-character settings-label column. Compact writer formatting is unchanged.

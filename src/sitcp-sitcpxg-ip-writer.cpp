@@ -27,12 +27,12 @@ void usage(const char* program) {
 
 int main(int argc, char** argv) {
     try {
-        if (argc < 3 ||
-            (argc == 2 &&
-             (std::string(argv[1]) == "-h" ||
-              std::string(argv[1]) == "--help"))) {
+        const bool show_help = argc == 2 &&
+            (std::string(argv[1]) == "-h" ||
+             std::string(argv[1]) == "--help");
+        if (argc < 3 || show_help) {
             usage(argv[0]);
-            return argc < 3 ? 2 : 0;
+            return show_help ? 0 : 2;
         }
 
         const std::string host = argv[1];

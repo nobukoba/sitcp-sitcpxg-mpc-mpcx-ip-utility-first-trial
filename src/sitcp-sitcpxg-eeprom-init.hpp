@@ -71,5 +71,42 @@ inline std::vector<uint8_t> prepare_mpcx_image(
     return image;
 }
 
+// Normal SiTCP uses a different initialization rule and programming window.
+// Official Writer 0.4.1-2 reads/writes FC10..FC4F, not FC00..FC4F.
+inline std::vector<uint8_t> prepare_mpc_image(
+    rbcp::Client& client, const std::vector<uint8_t>& eeprom,
+    const std::vector<uint8_t>& payload) {
+    if (eeprom.size() != 64 || payload.size() != 22) {
+        throw rbcp::Error("MPC image requires a 64-byte FC10..FC4F record "
+                          "and a 22-byte payload");
+    }
+
+    std::vector<uint8_t> image = eeprom;
+    // Recovered at 0x4076d0: the first AND last EEPROM IP octets are FF.
+    // This legacy MPC rule must not be replaced by the MPCX FC10-bit7 rule.
+    if (image[8] == 0xFF && image[11] == 0xFF) {
+        try {
+            const std::vector<uint8_t> runtime =
+                rbcp::read_retry(client, 0xFFFFFF18u, 40);
+            std::copy(runtime.begin(), runtime.end(), image.begin() + 8);
+        } catch (const rbcp::Error& error) {
+            // The official GUI uses fixed defaults on RAM failure. Preserve
+            // the CLI's fail-closed policy: do not silently replace an IP or
+            // port with defaults when current settings cannot be obtained.
+            throw rbcp::Error(
+                std::string("MPC EEPROM initialization requires complete runtime ") +
+                "FF18..FF3F: " + error.what() + ". No EEPROM writes performed; "
+                "automatic normal-SiTCP defaults are not enabled.");
+        }
+    }
+
+    // The official legacy writer always programs this exact control value.
+    // FC11 remains from EEPROM; MAC and license data come from the MPC file.
+    image[0] = 0x01;
+    std::copy(payload.begin(), payload.begin() + 6, image.begin() + 2);
+    std::copy(payload.begin() + 6, payload.end(), image.begin() + 0x30);
+    return image;
+}
+
 }  // namespace eeprom_init
 }  // namespace sitcp_sitcpxg

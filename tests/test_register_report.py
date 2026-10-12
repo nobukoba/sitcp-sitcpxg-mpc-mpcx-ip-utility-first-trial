@@ -5,6 +5,7 @@ import struct
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -15,6 +16,8 @@ class Device:
         self.xg = xg
         self.memory = {}
         self.requests = []
+        self.write_packets = []
+        self.request_times = []
         self.fault = fault
         for base in (0xFFFFFF00, 0xFFFFFC00):
             for offset in range(80):
@@ -43,10 +46,28 @@ class Device:
                 continue
             version, command, ident, length, address = struct.unpack('!BBBBI', packet[:8])
             self.requests.append((command, address, length))
+            self.request_times.append(time.monotonic())
             if command == 0x80:
+                self.write_packets.append((address, packet[8:]))
                 self.put(address, packet[8:])
             data = bytes(self.memory.get(address + i, 0) for i in range(length))
             status = command | 8
+            if self.fault and self.fault.startswith('utility_'):
+                if command == 0xC0 and address in (0xFFFFFC00, 0xFFFFFF00) and length == 64:
+                    if self.fault == 'utility_read_short':
+                        data = data[:-1]
+                    if self.fault == 'utility_read_bus':
+                        status |= 1
+                if command == 0x80 and address in (0xFFFFFC00, 0xFFFFFF00):
+                    if self.fault == 'utility_prefix_timeout':
+                        continue
+                if command == 0x80 and address in (0xFFFFFC18, 0xFFFFFF18):
+                    if self.fault == 'utility_parameters_timeout':
+                        continue
+                    if self.fault == 'utility_parameters_bus':
+                        status |= 1
+                    if self.fault == 'utility_verify_mismatch':
+                        self.memory[address + 4] ^= 1
             if not self.xg and address < 0xFFFFFF50 and address + length > 0xFFFFFF40:
                 status |= 1
             if self.fault == 'identifier_timeout' and address == 0xFFFFFF08:
@@ -65,12 +86,28 @@ class Device:
                 status |= 1
             if self.fault == 'rate' and address <= 0xFFFFFF41 < address + length:
                 status |= 1
+            if self.fault == 'parameter' and address <= 0xFFFFFF23 < address + length:
+                status |= 1
             if self.fault == 'eeprom' and address <= 0xFFFFFC40 < address + length:
                 status |= 1
             if self.fault == 'block' and length == 8 and address == 0xFFFFFF40:
                 status |= 1
             if address == 0xFFFFFF48 and self.fault == 'short':
                 data = data[:-1]
+            if address == 0xFFFFFF18 and length == 40:
+                if self.fault == 'mpc_ram_bus':
+                    status |= 1
+                if self.fault == 'mpc_ram_timeout':
+                    continue
+                if self.fault == 'mpc_ram_short':
+                    data = data[:-1]
+            if command == 0x80 and address == 0xFFFFFC10 and length == 64:
+                if self.fault == 'mpc_write_bus':
+                    status |= 1
+                if self.fault == 'mpc_write_timeout':
+                    continue
+                if self.fault == 'mpc_verify_mismatch':
+                    self.memory[0xFFFFFC20] ^= 1
             self.socket.sendto(struct.pack('!BBBBI', version, status, ident, length, address) + data, peer)
 
     def close(self):
@@ -85,6 +122,83 @@ class Device:
 
 
 class ReportTests(unittest.TestCase):
+    def test_generation_specific_parameters_and_units(self):
+        for xg in (False, True):
+            device = Device(xg=xg)
+            try:
+                for base, ip, disconnect in (
+                    (0xFFFFFF00, bytes([198, 51, 100, 7]), 11250),
+                    (0xFFFFFC00, bytes([203, 0, 113, 9]), 10000),
+                ):
+                    device.put(base + 0x1C, struct.pack('!H', 24))
+                    device.put(base + 0x1E, struct.pack('!H', 23))
+                    device.put(base + 0x20, struct.pack('!H', 1460))
+                    device.put(base + 0x22, struct.pack('!H', 4660))
+                    device.put(base + 0x2A, struct.pack('!H', disconnect))
+                    device.put(base + 0x2C, struct.pack('!H', 500))
+                    device.put(base + (0x32 if xg else 0x30), bytes([2, 0, 1, 2, 3, 4]))
+                    device.put(base + (0x38 if xg else 0x36), ip)
+                    device.put(base + (0x3C if xg else 0x3A), struct.pack('!H', 12345))
+                    device.memory[base + 0x10] = 0x17 if xg else 0x49
+                result = device.run('mpc-mpcx-ip-reader', '127.0.0.1')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                runtime, eeprom = result.stdout.split('EEPROM (0xFFFFFC00', 1)
+                for section, ip, seconds in (
+                    (runtime, '198.51.100.7 (0xC6336407)', 2880.256 if xg else 2880.0),
+                    (eeprom, '203.0.113.9 (0xCB007109)', 2560.256 if xg else 2560.0),
+                ):
+                    self.assertIn('TCP Port                            : 24 (0x0018)', section)
+                    self.assertIn('UDP Port                            : 4660 (0x1234)', section)
+                    self.assertIn('TCP Max Segment Size                : 1460 (0x05B4) bytes', section)
+                    self.assertIn(f'({seconds:.3f} s,', section)
+                    self.assertIn('server MAC                          : 02:00:01:02:03:04', section)
+                    self.assertIn('server IP                           : ' + ip, section)
+                    self.assertIn('server TCP port                     : 12345 (0x3039)', section)
+                    self.assertIn('TCP Keep Alive Enabled              : ' +
+                                  ('Enabled' if xg else 'Disabled'), section)
+                    self.assertLess(section.index('TCP Keep Alive Enabled'),
+                                    section.index('TCP Keep Alive(buffer not empty)'))
+                    self.assertLess(section.index('TCP Keep Alive(buffer not empty)'),
+                                    section.index('TCP Keep Alive(buffer empty)'))
+                    if xg:
+                        self.assertIn('TCP MSL                             : 500 (0x01F4) (250.0 ms)', section)
+                        self.assertIn('window scaling                      : Enabled', section)
+                    else:
+                        self.assertIn('TCP Re-Connect Interval             : 500 (0x01F4) ms', section)
+                        self.assertIn('TCP Command Port                    : 23 (0x0017)', section)
+                        self.assertIn('client ARP                          : Enabled', section)
+                        self.assertIn('MAC flow control                    : Enabled', section)
+                self.assertTrue(all(command == 0xC0 for command, _, _ in device.requests))
+            finally:
+                device.close()
+
+    def test_unreadable_normal_parameter_does_not_invent_value(self):
+        device = Device(xg=False, fault='parameter')
+        try:
+            result = device.run('mpc-mpcx-ip-reader', '127.0.0.1')
+            self.assertEqual(result.returncode, 3, result.stderr)
+            runtime = result.stdout.split('EEPROM (0xFFFFFC00', 1)[0]
+            self.assertIn('UDP Port                            : unavailable (RBCP bus error)', runtime)
+            self.assertIn('TCP Max Segment Size                : 8225 (0x2021) bytes', runtime)
+            self.assertIn('0xFFFFFF23', result.stderr)
+            self.assertFalse(any(address + length > 0xFFFFFF40 and address >= 0xFFFFFF00
+                                 for _, address, length in device.requests))
+            self.assertTrue(all(command == 0xC0 for command, _, _ in device.requests))
+        finally:
+            device.close()
+
+    def test_eeprom_ip_enable_timeout_restores_protection(self):
+        device = Device(fault='enable_timeout')
+        try:
+            result = device.run('sitcp-sitcpxg-ip-writer', '127.0.0.1', '192.0.2.42')
+            self.assertNotEqual(result.returncode, 0)
+            self.assertNotIn('Success!', result.stdout)
+            self.assertEqual(device.memory[0xFFFFFCFF], 255)
+            writes = [request for request in device.requests if request[0] == 0x80]
+            self.assertEqual(writes, [(0x80, 0xFFFFFCFF, 1), (0x80, 0xFFFFFCFF, 1)])
+        finally:
+            device.close()
+
     def check_dump(self, output, device):
         runtime, eeprom = output.split('EEPROM (0xFFFFFC00', 1)
         self.assertIn('current IP          : 127.0.0.1 (0x7F000001)', runtime)
@@ -108,12 +222,15 @@ class ReportTests(unittest.TestCase):
                         result = device.run(program, *args)
                         self.assertEqual(result.returncode, 0, result.stderr)
                         self.check_dump(result.stdout, device)
+                        self.assertEqual(result.stdout.count('\n\nTCP Port'), 2)
+                        self.assertIn('\n\nraw runtime', result.stdout)
+                        self.assertIn('\n\nraw EEPROM', result.stdout)
                         if xg:
                             self.assertIn('10000 (0x2710) Mbps', result.stdout)
                             self.assertIn('1000 (0x03E8) Mbps', result.stdout)
                             self.assertIn('10795 (0x2A2B)', result.stdout)
                         else:
-                            self.assertNotIn('transmission rate', result.stdout)
+                            self.assertIn('transmission rate                   : not supported (normal SiTCP)', result.stdout)
                             self.assertIn('0xFFFFFF00..0xFFFFFF3F, 64 bytes', result.stdout)
                             self.assertNotIn('FFFFFF40:', result.stdout)
                             self.assertNotIn('WARNING', result.stderr)
@@ -176,7 +293,7 @@ class ReportTests(unittest.TestCase):
                     self.assertIn('??', result.stdout)
                     if fault == 'rate':
                         runtime = result.stdout.split('EEPROM (0xFFFFFC00')[0]
-                        self.assertIn('transmission rate   : unavailable', runtime)
+                        self.assertIn('transmission rate                   : unavailable', runtime)
                         self.assertNotIn('10000 (0x2710)', runtime)
                         self.assertIn('FFFFFF40: 27 ?? 42 43 44 45 46 47', runtime)
                     if fault == 'eeprom':

@@ -133,9 +133,9 @@ class InitializationTests(unittest.TestCase):
             self.assertEqual(region(device, 0xFFFFFC18, 4), bytes([192, 0, 2, 42]))
             writes = [req for req in device.requests if req[0] == 0x80]
             self.assertLess(writes.index((0x80, 0xFFFFFC40, 16)),
-                            writes.index((0x80, 0xFFFFFC18, 4)))
-            self.assertLess(writes.index((0x80, 0xFFFFFC18, 4)),
-                            writes.index((0x80, 0xFFFFFF18, 4)))
+                            writes.index((0x80, 0xFFFFFC18, 40)))
+            self.assertLess(writes.index((0x80, 0xFFFFFC18, 40)),
+                            writes.index((0x80, 0xFFFFFF18, 40)))
         finally:
             device.close()
 

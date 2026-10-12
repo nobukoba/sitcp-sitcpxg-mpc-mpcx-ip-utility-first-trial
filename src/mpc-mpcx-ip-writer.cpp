@@ -4,6 +4,7 @@
 #include "sitcp-sitcpxg-rbcp.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <fstream>
 #include <iomanip>
@@ -11,6 +12,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -22,6 +24,7 @@ constexpr uint32_t XG_IDENTIFIER = 0xFFFFFF08u;
 constexpr size_t EEPROM_READ_SIZE = 0x50;
 constexpr size_t MPC_FILE_SIZE = 22;
 constexpr int FIELD_WIDTH = 20;
+constexpr int NORMAL_MPC_WRITE_SETTLE_MS = 500;
 
 namespace rbcp = sitcp_sitcpxg::rbcp;
 using RbcpClient = rbcp::Client;
@@ -150,24 +153,41 @@ void set_write_enable(RbcpClient& c, bool enabled) {
     }
 }
 
+void settle_normal_mpc_write(int type) {
+    if (type == 2) {
+        // The official normal-MPC capture spaces RBCP operations by ~500 ms.
+        // Retain this interval between enable, the bulk write, and protection.
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(NORMAL_MPC_WRITE_SETTLE_MS));
+    }
+}
+
 std::vector<uint8_t> program(
     RbcpClient& client, const std::vector<uint8_t>& payload, int type,
     const std::vector<uint8_t>& eeprom) {
     std::vector<uint8_t> image;
+    uint32_t programming_base = EEPROM_BASE;
+    size_t write_chunk_size = 16;
     if (type == 1) {
         bool initialized = false;
         image = sitcp_sitcpxg::eeprom_init::prepare_mpcx_image(
             client, eeprom, payload, initialized);
     } else {
-        image = eeprom;
-        std::copy(payload.begin(), payload.begin() + 6, image.begin() + 0x12);
-        std::copy(payload.begin() + 6, payload.end(), image.begin() + 0x40);
+        image = sitcp_sitcpxg::eeprom_init::prepare_mpc_image(
+            client, eeprom, payload);
+        programming_base = EEPROM_BASE + 0x10;
+        write_chunk_size = 64;
     }
 
     try {
         set_write_enable(client, true);
-        write_exact(client, EEPROM_BASE, image, 16);
+        settle_normal_mpc_write(type);
+        write_exact(client, programming_base, image, write_chunk_size);
+        settle_normal_mpc_write(type);
     } catch (...) {
+        // An unacknowledged data write may have been accepted. Allow settling,
+        // then attempt protection without repeating the data write.
+        settle_normal_mpc_write(type);
         try {
             set_write_enable(client, false);
         } catch (...) {
@@ -175,8 +195,9 @@ std::vector<uint8_t> program(
         throw;
     }
     set_write_enable(client, false);
+    settle_normal_mpc_write(type);
 
-    const auto actual = read_exact(client, EEPROM_BASE, image.size());
+    const auto actual = read_exact(client, programming_base, image.size());
     if (actual != image) {
         size_t i = 0;
         while (i < image.size() && actual[i] == image[i]) {
@@ -185,7 +206,7 @@ std::vector<uint8_t> program(
         std::ostringstream os;
         os << "EEPROM read-back verification failed";
         if (i < image.size()) {
-            os << " at 0x" << std::hex << (EEPROM_BASE + i)
+            os << " at 0x" << std::hex << (programming_base + i)
                << ": expected 0x" << static_cast<unsigned>(image[i])
                << ", got 0x" << static_cast<unsigned>(actual[i]);
         }
@@ -249,7 +270,6 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
         }
 
         RbcpClient client(ip, port, timeout);
-        const auto eeprom = read_exact(client, EEPROM_BASE, EEPROM_READ_SIZE);
         std::string detection;
         const int target_type = detect_target(client, detection);
 
@@ -262,6 +282,11 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
             return 7;
         }
 
+        const uint32_t read_base = file_type == 1
+            ? EEPROM_BASE : EEPROM_BASE + 0x10;
+        const size_t read_size = file_type == 1 ? EEPROM_READ_SIZE : 64;
+        const std::vector<uint8_t> eeprom =
+            read_exact(client, read_base, read_size);
         program(client, payload, file_type, eeprom);
         return 0;
     } catch (const std::exception& e) {
@@ -281,6 +306,9 @@ void unified_usage(const char* program) {
         << "For uninitialized MPCX EEPROM (FC10 bit7 set), restores settings\n"
         << "from complete runtime FF00..FF4F before overlaying the MPCX file.\n"
         << "If runtime cannot be read, stops before writing; no guessed defaults.\n\n"
+        << "Normal MPC writes FC10..FC4F, sets control to 0x01 and restores\n"
+        << "runtime FF18..FF3F if the first/last EEPROM IP octets are FF.\n"
+        << "Unreadable runtime stops before writing; no automatic default IP.\n\n"
         << "Options:\n"
         << "  --clear              Clear only: erase EEPROM FC00..FC7F (default: off)\n"
         << "                       Deletes license/settings; no file or IP changes allowed\n"

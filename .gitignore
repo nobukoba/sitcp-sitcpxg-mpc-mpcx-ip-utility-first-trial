@@ -8,3 +8,6 @@ __pycache__/
 /src/mpc-mpcx-ip-command
 /src/sitcp-sitcpxg-ip-writer
 /src/sitcp-sitcpxg-ip-reader
+
+# Cygwin appends .exe when building the same POSIX sources on Windows.
+/src/*.exe

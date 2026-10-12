@@ -152,45 +152,90 @@ inline std::string ip_value(const RegisterImage& image, size_t offset) {
                               : "unavailable (RBCP bus error)";
 }
 
-inline void show_xg_parameters(const RegisterImage& image) {
-    field("TCP port", numeric_value(image, 0x1C));
-    field("TCP MSS", numeric_value(image, 0x20, " bytes"));
-    field("RBCP UDP port", numeric_value(image, 0x22));
-    field("keepalive nonempty", numeric_value(image, 0x24, " ms"));
-    field("keepalive empty", numeric_value(image, 0x26, " ms"));
-    field("connect timeout", numeric_value(image, 0x28, " ms"));
+inline void setting_field(const std::string& name, const std::string& value) {
+    std::cout << std::left << std::setw(36)
+              << name << ": " << value << '\n';
+}
+
+inline void control_flag(const RegisterImage& image, const std::string& name,
+                         uint8_t mask) {
+    setting_field(name, image.has(0x10, 1)
+          ? ((image.bytes[0x10] & mask) ? "Enabled" : "Disabled")
+          : "unavailable (RBCP bus error)");
+}
+
+inline void show_parameters(const RegisterImage& image, bool xg) {
+    setting_field("TCP Port", numeric_value(image, 0x1C));
+    setting_field("UDP Port", numeric_value(image, 0x22));
+    if (!xg) {
+        setting_field("TCP Command Port", numeric_value(image, 0x1E));
+    }
+    std::cout << "\nTCP settings:\n";
+    setting_field("TCP Max Segment Size", numeric_value(image, 0x20, " bytes"));
+    control_flag(image, "TCP Keep Alive Enabled", 0x04);
+    setting_field("TCP Keep Alive(buffer not empty)", numeric_value(image, 0x24, " ms"));
+    setting_field("TCP Keep Alive(buffer empty)", numeric_value(image, 0x26, " ms"));
+    setting_field("TCP Timeout(Connecting)", numeric_value(image, 0x28, " ms"));
 
     std::ostringstream disconnect;
     disconnect << numeric_value(image, 0x2A);
     if (image.has(0x2A, 2)) {
-        const double seconds = (be16(image.bytes, 0x2A) + 1.0) * 0.256;
+        const double seconds =
+            (be16(image.bytes, 0x2A) + (xg ? 1.0 : 0.0)) * 0.256;
         disconnect << " (" << std::fixed << std::setprecision(3)
                    << seconds << " s, " << std::setprecision(2)
                    << seconds / 60.0 << " min)";
     }
-    field("disconnect timeout", disconnect.str());
+    setting_field("TCP Timeout(Disconnect)", disconnect.str());
 
-    std::ostringstream msl;
-    msl << numeric_value(image, 0x2C);
-    if (image.has(0x2C, 2)) {
-        msl << " (" << std::fixed << std::setprecision(1)
-            << be16(image.bytes, 0x2C) * 0.5 << " ms)";
+    if (xg) {
+        std::ostringstream msl;
+        msl << numeric_value(image, 0x2C);
+        if (image.has(0x2C, 2)) {
+            msl << " (" << std::fixed << std::setprecision(1)
+                << be16(image.bytes, 0x2C) * 0.5 << " ms)";
+        }
+        setting_field("TCP MSL", msl.str());
+    } else {
+        setting_field("TCP Re-Connect Interval", numeric_value(image, 0x2C, " ms"));
     }
-    field("TCP MSL", msl.str());
-    field("retransmission time", numeric_value(image, 0x2E, " ms"));
-    field("server MAC", mac_value(image, 0x32));
-    field("server IP", ip_value(image, 0x38));
-    field("server TCP port", numeric_value(image, 0x3C));
+    setting_field("TCP Re-Transmition Timer", numeric_value(image, 0x2E, " ms"));
+    std::cout << "\nClient / server settings:\n";
+    setting_field("server MAC", mac_value(image, xg ? 0x32 : 0x30));
+    setting_field("server IP", ip_value(image, xg ? 0x38 : 0x36));
+    setting_field("server TCP port", numeric_value(image, xg ? 0x3C : 0x3A));
+    std::cout << "\nControl settings:\n";
+    setting_field("control register", image.has(0x10, 1)
+          ? decimal_hex(image.bytes[0x10], 2)
+          : "unavailable (RBCP bus error)");
+    control_flag(image, "reset bit", 0x80);
+    if (xg) {
+        control_flag(image, "window scaling", 0x10);
+    } else {
+        control_flag(image, "client ARP", 0x40);
+        control_flag(image, "duplicate ACK", 0x20);
+        control_flag(image, "MIF initializer", 0x10);
+        control_flag(image, "MAC flow control", 0x08);
+    }
+    control_flag(image, "fast retransmission", 0x02);
+    control_flag(image, "Nagle buffering", 0x01);
+    std::cout << "\nTransmission settings:\n";
+    if (!xg) {
+        setting_field("transmission rate", "not supported (normal SiTCP)");
+        setting_field("rate note", "link speed / throughput not measured");
+        return;
+    }
     if (!image.has(0x40, 2)) {
-        field("transmission rate", "unavailable (RBCP bus error)");
+        setting_field("transmission rate", "unavailable (RBCP bus error)");
     } else {
         const uint16_t rate = be16(image.bytes, 0x40);
         if (rate >= 1 && rate <= 10000) {
-            field("transmission rate", decimal_hex(rate) + " Mbps");
+            setting_field("transmission rate", decimal_hex(rate) + " Mbps");
+            setting_field("rate note", "configured line-rate limit; not measured throughput");
         } else {
-            field("transmission rate raw", decimal_hex(rate) +
+            setting_field("transmission rate raw", decimal_hex(rate) +
                   " (outside documented range 1..10000)");
-            field("rate note", "raw value; may contain data unrelated to XG rate");
+            setting_field("rate note", "raw value; may contain data unrelated to XG rate");
         }
     }
 }
@@ -265,21 +310,23 @@ inline bool show(const std::string& host, uint16_t port, double timeout) {
     std::cout << "\nRuntime registers (0xFFFFFF00.."
               << address_string(0xFFFFFF00u + static_cast<uint32_t>(runtime_length) - 1)
               << ", " << std::to_string(runtime_length) << " bytes):\n";
+    std::cout << "General settings:\n";
     field("current MAC", mac_value(runtime, 0x12));
     field("current IP", ip_value(runtime, 0x18));
-    if (target_type == 1) {
-        show_xg_parameters(runtime);
-    }
+    std::cout << '\n';
+    show_parameters(runtime, target_type == 1);
+    std::cout << '\n';
     std::cout << (target_type == 1 ? "raw runtime FF00..FF4F:\n"
                                   : "raw runtime FF00..FF3F:\n");
     dump(0xFFFFFF00u, runtime);
 
     std::cout << "\nEEPROM (0xFFFFFC00..0xFFFFFC4F, 80 bytes):\n";
+    std::cout << "General settings:\n";
     field("EEPROM MAC", mac_value(eeprom, 0x12));
     field("EEPROM IP", ip_value(eeprom, 0x18));
-    if (target_type == 1) {
-        show_xg_parameters(eeprom);
-    }
+    std::cout << '\n';
+    show_parameters(eeprom, target_type == 1);
+    std::cout << '\n';
     std::cout << "raw EEPROM FC00..FC4F:\n";
     dump(EEPROM_BASE, eeprom);
 

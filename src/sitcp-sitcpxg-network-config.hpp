@@ -3,6 +3,7 @@
 #include "sitcp-sitcpxg-rbcp.hpp"
 
 #include <arpa/inet.h>
+#include <algorithm>
 #include <chrono>
 #include <iomanip>
 #include <iostream>
@@ -135,12 +136,20 @@ inline void write_eeprom_ip(const std::string& host,
                             uint16_t port, double timeout) {
     Client client(host, port, timeout);
     const std::vector<uint8_t> bytes = parse_ipv4(new_ip);
+    std::vector<uint8_t> settings = rbcp::read_retry(client, 0xFFFFFC00u, 64);
+    std::copy(bytes.begin(), bytes.end(), settings.begin() + 0x18);
+    const std::vector<uint8_t> prefix(settings.begin(), settings.begin() + 17);
+    const std::vector<uint8_t> parameters(settings.begin() + 0x18, settings.end());
 
-    set_eeprom_write_enable(client, true);
     try {
-        const std::vector<uint8_t> ack = client.write(EEPROM_IP, bytes);
-        if (ack.size() != bytes.size()) {
-            throw Error("unexpected RBCP ACK length for EEPROM IP write");
+        // A lost enable acknowledgement may still leave EEPROM writable.
+        // Keep enable inside the cleanup scope, just like MPC programming.
+        set_eeprom_write_enable(client, true);
+        if (client.write(0xFFFFFC00u, prefix).size() != prefix.size()) {
+            throw Error("unexpected RBCP ACK length for EEPROM settings prefix");
+        }
+        if (client.write(EEPROM_IP, parameters).size() != parameters.size()) {
+            throw Error("unexpected RBCP ACK length for EEPROM settings parameters");
         }
     } catch (...) {
         try {
@@ -151,8 +160,8 @@ inline void write_eeprom_ip(const std::string& host,
     }
     set_eeprom_write_enable(client, false);
 
-    if (rbcp::read_retry(client, EEPROM_IP, 4) != bytes) {
-        throw Error("EEPROM IP read-back mismatch");
+    if (rbcp::read_retry(client, 0xFFFFFC00u, 64) != settings) {
+        throw Error("EEPROM settings read-back mismatch");
     }
 }
 
@@ -161,12 +170,23 @@ inline void write_current_ip(const std::string& host,
                              uint16_t port, double timeout) {
     const std::vector<uint8_t> bytes = parse_ipv4(new_ip);
     Client old_client(host, port, timeout);
+    // The captured Utility refreshes the runtime settings twice before writing.
+    rbcp::read_retry(old_client, 0xFFFFFF00u, 64);
+    std::vector<uint8_t> settings = rbcp::read_retry(old_client, 0xFFFFFF00u, 64);
+    std::copy(bytes.begin(), bytes.end(), settings.begin() + 0x18);
+    const std::vector<uint8_t> prefix(settings.begin(), settings.begin() + 17);
+    const std::vector<uint8_t> parameters(settings.begin() + 0x18, settings.end());
+
+    // Only the second block changes the address. A prefix failure is fatal.
+    if (old_client.write(0xFFFFFF00u, prefix).size() != prefix.size()) {
+        throw Error("unexpected RBCP ACK length for runtime settings prefix");
+    }
 
     try {
         const std::vector<uint8_t> ack =
-            old_client.write(CURRENT_IP, bytes);
-        if (ack.size() != bytes.size()) {
-            throw Error("unexpected RBCP ACK length for current IP write");
+            old_client.write(CURRENT_IP, parameters);
+        if (ack.size() != parameters.size()) {
+            throw Error("unexpected RBCP ACK length for runtime settings parameters");
         }
     } catch (const Timeout&) {
         // The address may change before the UDP acknowledgement returns.
@@ -176,8 +196,8 @@ inline void write_current_ip(const std::string& host,
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
     Client new_client(new_ip, port, timeout);
-    if (rbcp::read_retry(new_client, CURRENT_IP, 4) != bytes) {
-        throw Error("current IP read-back mismatch at new address " + new_ip);
+    if (rbcp::read_retry(new_client, 0xFFFFFF00u, 64) != settings) {
+        throw Error("runtime settings read-back mismatch at new address " + new_ip);
     }
 }
 

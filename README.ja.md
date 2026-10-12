@@ -14,6 +14,11 @@ RBCPを使ってSiTCP / SiTCP-XGを設定する、試験的なC++11ユーティ�
 - `sitcp-sitcpxg-ip-writer` — SiTCP / SiTCP-XGのIP設定専用writerです。
 - `sitcp-sitcpxg-ip-reader` — SiTCP / SiTCP-XGのIP設定専用readerです。
 
+MPC/MPCX readerは両世代で、一般設定・TCP・接続先サーバー・制御・送信設定をRAMとEEPROMに分けて表示します。
+十進値と十六進値の併記は維持しています。通常SiTCPにはXGの送信レート設定がなく、XGで表示するレートも実測速度ではなく設定上限です。
+
+readerのTCP項目名は正規Utilityに合わせ、`TCP Keep Alive Enabled`とバッファの有無による2つのKeep Alive時間を並べて表示します。十六進値と時間換算は維持しています。
+
 ## インストール
 
 ```bash
@@ -65,7 +70,7 @@ MPC/MPCXファイルを使用せず、SiTCP / SiTCP-XGのIP設定だけを扱う
 ./bin/sitcp-sitcpxg-ip-writer 192.168.2.161 192.168.2.170
 ```
 
-MPC/MPCXのライセンスデータは読み取ったり書き換えたりしません。
+MPC/MPCXファイルは不要です。IP書き込みは正規Utilityと同じ設定ブロックの手順で行い、指定したIP以外は読み取った値を保持します。EEPROM先頭領域に含まれるライセンスのバイトも、読み取った値のまま書き戻します。現在のIPを変更する場合は`--current`を指定してください。既定ではEEPROMだけを変更します。
 
 ## 詳細コマンドの使い方
 
@@ -113,6 +118,15 @@ RBCPの既定UDPポートは`4660`、タイムアウトは`3`秒です。`--help
 
 writerは変更前後のランタイム/EEPROMのMAC・IPを表示し、すべての操作と検証が完了すると成功を表示します。全レジスタのダンプはreaderで確認してください。MPC/MPCXの種類は拡張子ではなく22バイトの内容から判定します。
 
+### 通常SiTCPのMPC書き込み
+
+EEPROMのIPが未初期化レコードを示す場合は、現在のネットワーク設定を復元して
+MPCを書き込みます。それ以外ではEEPROMの設定を維持します。初期化で保存される
+IPは現在のランタイムIPです。別のIPを保存する場合は`--set-eeprom-ip`を指定してください。
+必要なランタイム設定を完全に読み取れない場合は、固定の初期IPで置き換えず、
+書き込み前に停止します。実キャプチャと互換性の範囲は
+[開発者ガイド](FOR_DEVELOPERS.md#normal-mpc-official-writer-comparison-2026-10-13)を参照してください。
+
 ### EEPROM消去後のMPCX書き込み
 
 書き込み前に、変更予定の内容を確認できます。
@@ -155,7 +169,9 @@ writerは変更前後のランタイム/EEPROMのMAC・IPを表示し、すべ�
 
 既定のビルドは`-std=c++11`を使います。対象環境はLinux、macOS、WSLです。
 
-### インストール先と更新
+#readerのTCP項目名は正規Utilityに合わせ、`TCP Keep Alive Enabled`とバッファの有無による2つのKeep Alive時間を並べて表示します。十六進値と時間換算は維持しています。
+
+## インストール先と更新
 
 既定のインストール先はリポジトリ内の`./bin/`で、管理者権限は不要です。`make`だけではインストール済みコピーは更新されません。
 

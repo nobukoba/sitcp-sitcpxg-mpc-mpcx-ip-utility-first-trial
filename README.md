@@ -14,6 +14,14 @@ The installed command set contains five commands:
 - `sitcp-sitcpxg-ip-writer` — IP-only writer for SiTCP / SiTCP-XG.
 - `sitcp-sitcpxg-ip-reader` — IP-only reader for SiTCP / SiTCP-XG.
 
+The MPC/MPCX reader displays General, TCP, Client/server, Control and
+Transmission settings for both generations, separately for RAM and EEPROM.
+Decimal values retain their hexadecimal equivalents. Normal SiTCP has no
+XG transmission-rate setting; the displayed XG rate is a configured limit,
+not measured throughput.
+
+Reader TCP parameter labels follow the official Utility, including `TCP Keep Alive Enabled` and both Keep Alive timers. Hexadecimal values and time conversions are retained.
+
 ## Quick installation
 
 ```bash
@@ -67,7 +75,7 @@ Use these when only SiTCP / SiTCP-XG IP configuration is needed and no MPC/MPCX 
 ./bin/sitcp-sitcpxg-ip-writer 192.168.2.161 192.168.2.170
 ```
 
-These commands do not read or rewrite MPC/MPCX license data.
+No MPC/MPCX file is needed. IP writing follows the official Utility setting-block sequence, retaining the values read for every field except the requested IP. The EEPROM prefix is read and written back unchanged, including any license bytes there. Use `--current` to change the current IP; the default changes EEPROM only.
 
 ## How to use the advanced command
 
@@ -116,6 +124,16 @@ Writer options:
 When both options are given, EEPROM IP is set first and current IP last. The writer reconnects to the new IP and verifies the result.
 
 The writer displays runtime and EEPROM MAC/IP before and after the operation. Success is printed only after all requested operations and verification complete. Use the reader for full register dumps. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
+
+### Normal MPC writing
+
+Normal SiTCP programming restores the current network settings when the EEPROM
+IP indicates an uninitialized record. Otherwise it retains the EEPROM settings.
+Initialization saves the current runtime IP; use `--set-eeprom-ip` to save a
+different IP. If the required runtime settings cannot be read completely, the
+writer stops before writing instead of substituting a fixed default IP.
+See the [developer guide](FOR_DEVELOPERS.md#normal-mpc-official-writer-comparison-2026-10-13)
+for the reference capture and compatibility limits.
 
 ### MPCX writing after clearing EEPROM
 
