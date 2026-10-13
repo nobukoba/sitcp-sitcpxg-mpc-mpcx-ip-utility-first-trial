@@ -1,6 +1,7 @@
 """Compare IP setting writes with independently captured official GUI packets."""
 import json
 import pathlib
+import socket
 import unittest
 from test_register_report import Device
 
@@ -11,6 +12,55 @@ def region(device, base, length=80):
     return bytes(device.memory.get(base + i, 0) for i in range(length))
 
 class UtilityIpTests(unittest.TestCase):
+    def test_ip_and_port_settings_for_both_generations(self):
+        for xg in (False, True):
+            for current in (False, True):
+                device = Device(xg=xg)
+                try:
+                    before = {base: region(device, base) for base in (0xFFFFFC00, 0xFFFFFF00)}
+                    new_port = 5678
+                    if current:
+                        device.migrate_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                        device.migrate_socket.bind(('127.0.0.1', 0))
+                        device.migrate_socket.settimeout(0.05)
+                        new_port = device.migrate_socket.getsockname()[1]
+                    result = device.run('sitcp-sitcpxg-ip-writer', '127.0.0.1',
+                                        '127.0.0.1' if current else '192.0.2.42',
+                                        '--current' if current else '--eeprom',
+                                        '--tcp-port', '12345', '--udp-port', str(new_port))
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    for base, original in before.items():
+                        wanted = bytearray(original)
+                        if base == (0xFFFFFF00 if current else 0xFFFFFC00):
+                            wanted[24:28] = socket.inet_aton('127.0.0.1' if current else '192.0.2.42')
+                            wanted[28:30] = (12345).to_bytes(2, 'big')
+                            wanted[34:36] = new_port.to_bytes(2, 'big')
+                        self.assertEqual(region(device, base), bytes(wanted))
+                    expected = [(0xFFFFFF00, 17), (0xFFFFFF18, 40)] if current else [
+                        (0xFFFFFCFF, 1), (0xFFFFFC00, 17), (0xFFFFFC18, 40), (0xFFFFFCFF, 1)]
+                    self.assertEqual([(a, len(d)) for a, d in device.write_packets], expected)
+                finally:
+                    device.close()
+
+    def test_invalid_ports_and_ip_abort_before_network(self):
+        for option in ('--tcp-port', '--udp-port', '--port'):
+            for value in ('0', '-1', '65536', '24x', ''):
+                device = Device()
+                try:
+                    args = [option, value] if value else [option]
+                    result = device.run('sitcp-sitcpxg-ip-writer', '127.0.0.1', '192.0.2.42', *args)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(device.requests, [])
+                finally:
+                    device.close()
+        device = Device()
+        try:
+            result = device.run('sitcp-sitcpxg-ip-writer', '127.0.0.1', 'invalid')
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(device.requests, [])
+        finally:
+            device.close()
+
     def run_ip(self, device, current=False):
         args = ['127.0.0.1', '127.0.0.1' if current else '192.0.2.42']
         if current:

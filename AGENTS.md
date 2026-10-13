@@ -82,8 +82,12 @@ Keep C++ source readable and conventionally formatted.
 - Determine the target generation first from the documented read-only SiTCP-XG Identifier register at `0xFFFFFF08..0xFFFFFF0B`; only an exact value of `0x58544350` identifies SiTCP-XG. Keep generation detection separate from MPC/MPCX payload classification.
 - Do not use the former experimental `0xFFFFFF50` probe as a SiTCP-XG generation identifier.
 - Do not infer the device generation solely from FC00/FC40 payload-looking data: verified hardware shows stale/alternate-layout data can make both reconstructed payloads classify as valid.
-- EEPROM writes must restore write protection even after failures where that mechanism applies.
-- Read-back verification is mandatory after destructive configuration writes.
+- High-level EEPROM writes must attempt to restore write protection after
+  failures. A network outage may prevent restoration; never promise success
+  when cleanup or read-back cannot be completed.
+- Read-back verification is mandatory after high-level configuration writes.
+  Advanced rbcp-write remains a raw diagnostic transaction; it does not perform
+  automatic read-back or EEPROM protection handling.
 - Do not blindly retry destructive writes after a lost UDP acknowledgement; the write may already have occurred.
 - Read operations may retry timeouts.
 
@@ -111,6 +115,11 @@ Document that `make` alone does not refresh installed copies and that
 never remove the source directory or installed binaries.
 
 ## Safety
+
+- Shared clear operations must leave at least 500 ms between write starts,
+  including enable, each 16-byte block and protection restoration on success or
+  failure. Use a monotonic clock; ACK time counts toward the interval. Retain
+  mandatory read-back and do not retry erase writes.
 
 `mpc-mpcx-ip-command rbcp-write` and `clear` are intentionally low-level/destructive. Keep explicit command names and the `--yes-really-clear` guard for the advanced clear command.
 Writer `--clear` is an explicit standalone clear-only request and needs no
@@ -199,9 +208,9 @@ Preserve all unique information when reorganizing documentation: move technical 
 - Never program diagnostic placeholder bytes or mix partial RAM with invented
   defaults. No verified MPCX default image exists in our evidence. The official
   normal-SiTCP fallback table must not be reused for SiTCP-XG.
-- Leave FC50..FC7F unchanged; official optional extension copying is outside
-  this implementation. Do not imply full official-tool equivalence.
-- Always prepare the complete image before enabling writes. Attempt protection
+- During XG initialization only, attempt 16-byte runtime reads at FF50, FF60, FF70 after the base image write. Copy each complete readable block to the corresponding EEPROM block; skip failed reads without changing that block. Extension writes are never optional failures: restore protection and fail, without retry. Verify every copied block. Keep success output unchanged; do not claim timing equivalence.
+- Always prepare the complete mandatory base image before enabling writes.
+  Optional extension source reads occur later, after the base data write. Attempt protection
   restoration even after an ambiguous enable ACK; never retry data writes.
 - Keep EEPROM IP overrides after image programming, and runtime IP changes
   last with reconnect/read-back verification. Never clear implicitly.
@@ -219,12 +228,12 @@ Preserve all unique information when reorganizing documentation: move technical 
 - On initialization, require complete runtime FF18..FF3F and copy those 40 bytes
   to FC18..FC3F before overlaying the license. Abort before writes on RAM failure;
   do not silently apply the official GUI's fixed default-address fallback.
-- Issue the captured single 64-byte normal-MPC data write at FC10, retaining
+- By default issue the captured single 64-byte normal-MPC data write at FC10; an explicit chunk size may split it. Retain
   protection cleanup, no destructive retries, and full read-back verification.
 - Retain approximately 500 ms settling between normal-MPC enable/data/protect
   writes, including before cleanup after an ambiguous data ACK. Do not apply
   this new pacing to the existing MPCX programming path.
-- Preserve the existing MPCX image preparation and 16-byte chunking.
+- Preserve MPCX image preparation. Default programming is one complete image write; explicit `--write-chunk-size 16` selects the previous 16-byte chunking.
 - The checked-in official reference contains synthetic data only. Never replace
   it with a proprietary license or commit the official executable/disassembly.
 - IP-only EEPROM writes must attempt protection restoration even after a lost
@@ -236,8 +245,45 @@ Preserve all unique information when reorganizing documentation: move technical 
 - User-requested official Utility compatibility supersedes the previous four-byte IP write policy. Use the shared network helper for all IP write entry points.
 - Read FC00/64 before EEPROM writes; enable FCFF=00, write FC00/17 and FC18/40, restore FCFF=FF, and verify the entire 64-byte image.
 - Read FF00/64 twice before runtime writes; write FF00/17, then FF18/40, reconnect to the requested IP and verify all 64 bytes.
-- Replace only IP bytes in the captured settings image. Preserve every other value, including unchanged license bytes in the EEPROM prefix. Do not parse license payloads or require license files. Leave offsets 11..17 and regions beyond 3F unchanged.
+- Replace only IP bytes by default. The standalone IP writer may explicitly set TCP data port (--tcp-port) and UDP/RBCP port (--udp-port) in the same captured settings image. Preserve every other value, including unchanged license bytes in the EEPROM prefix. Do not parse license payloads or require license files. Leave offsets 11..17 and regions beyond 3F unchanged.
 - Abort on incomplete settings reads before writes. Never retry configuration writes. A runtime prefix failure is fatal; a timeout of the final address-changing block permits read-back at the new IP. Always attempt EEPROM protection cleanup after an enable/data failure.
 - Keep documentation honest: simulator agreement does not establish real-device IP migration or complete packet-for-packet GUI equivalence.
 
 - Reader TCP parameter labels must match the confirmed official Utility strings; keep the Keep Alive enable flag next to both buffer-state timers. Preserve decimal/hex and use a 36-character settings-label column. Compact writer formatting is unchanged.
+
+## MPC/MPCX transfer-size option
+
+- Default `--write-chunk-size` is automatic whole-image programming: normal
+  MPC 64 bytes at FC10, initialized MPCX 24 bytes at FC00, initialization MPCX
+  80 bytes at FC00. Do not expand the preservation image or change its bytes.
+- Explicit N must be a complete positive decimal integer in 1..255 bytes.
+  `--write-chunk-size 16` selects 16-byte writes with a shorter final block.
+- Reject invalid sizes, missing values and clear/size combinations before
+  any device access. Forward the option through the high-level writer wrapper.
+- Keep image validation, generation checks, mandatory complete read-back,
+  protection cleanup, IP override order and no destructive retries in both modes.
+- Chunk size affects MPC/MPCX data programming only, not IP or clear sequences.
+
+## Standalone Utility port options
+
+- --tcp-port and --udp-port accept complete decimal integers in 1..65535;
+  omitted values preserve the existing setting. --port is the transport port
+  used to reach the device, not a request to change its stored port.
+- Keep native 17+40-byte settings writes for both generations and destinations.
+  Change only IP at 18..1B and explicitly requested TCP at 1C..1D / UDP at 22..23.
+- After runtime UDP changes, verification and the final compact snapshot must
+  use the requested UDP port; EEPROM UDP changes keep the old runtime endpoint.
+- Do not add port options to MPC programming or advanced commands implicitly.
+  Preserve existing CLI behavior and compact success formatting.
+
+## Documentation placement requested by the user
+
+- Keep README introductions and main sections focused on installation and basic usage.
+- Place TCP/UDP port options and examples only in the README appendix.
+- Keep transfer chunk sizing (including 16-byte examples) in CLI help and the
+  developer guide, not README, including its option list.
+- Keep decimal/hex formatting, raw-byte layout, timing, register maps, detailed
+  algorithms and evidence in FOR_DEVELOPERS.md, not README.
+- Mark historical implementation/test statements explicitly. Current summaries
+  must reflect later physical verification and the current whole-image default.
+- Preserve identical English/Japanese command examples and valid heading links.

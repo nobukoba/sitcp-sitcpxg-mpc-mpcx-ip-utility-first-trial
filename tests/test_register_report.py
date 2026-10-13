@@ -19,6 +19,7 @@ class Device:
         self.write_packets = []
         self.request_times = []
         self.fault = fault
+        self.migrate_socket = None
         for base in (0xFFFFFF00, 0xFFFFFC00):
             for offset in range(80):
                 self.memory[base + offset] = offset
@@ -52,6 +53,17 @@ class Device:
                 self.put(address, packet[8:])
             data = bytes(self.memory.get(address + i, 0) for i in range(length))
             status = command | 8
+            if command == 0xC0 and 0xFFFFFF50 <= address < 0xFFFFFF80:
+                if any(address + i not in self.memory for i in range(length)):
+                    status |= 1
+                if self.fault == 'extension_bus' or (self.fault == 'extension_partial' and address == 0xFFFFFF60):
+                    status |= 1
+                if self.fault == 'extension_timeout':
+                    continue
+                if self.fault == 'extension_short':
+                    data = data[:-1]
+            if command == 0x80 and address == 0xFFFFFC50 and self.fault == 'extension_write_timeout':
+                continue
             if self.fault and self.fault.startswith('utility_'):
                 if command == 0xC0 and address in (0xFFFFFC00, 0xFFFFFF00) and length == 64:
                     if self.fault == 'utility_read_short':
@@ -72,13 +84,13 @@ class Device:
                 status |= 1
             if self.fault == 'identifier_timeout' and address == 0xFFFFFF08:
                 continue
-            if command == 0x80 and address == 0xFFFFFC20:
+            if command == 0x80 and address <= 0xFFFFFC20 < address + length:
                 if self.fault == 'write_bus':
                     status |= 1
                 if self.fault == 'write_timeout':
                     continue
                 if self.fault == 'verify_mismatch':
-                    self.memory[address] ^= 1
+                    self.memory[0xFFFFFC20] ^= 1
             if command == 0x80 and address == 0xFFFFFCFF and packet[8:] == b'\x00':
                 if self.fault == 'enable_timeout':
                     continue
@@ -109,6 +121,11 @@ class Device:
                 if self.fault == 'mpc_verify_mismatch':
                     self.memory[0xFFFFFC20] ^= 1
             self.socket.sendto(struct.pack('!BBBBI', version, status, ident, length, address) + data, peer)
+            if command == 0x80 and address == 0xFFFFFF18 and self.migrate_socket is not None:
+                old_socket = self.socket
+                self.socket = self.migrate_socket
+                self.migrate_socket = None
+                old_socket.close()
 
     def close(self):
         self.running = False
@@ -122,6 +139,52 @@ class Device:
 
 
 class ReportTests(unittest.TestCase):
+    def test_optional_extensions(self):
+        for fault in (None, 'extension_bus', 'extension_partial', 'extension_timeout',
+                      'extension_short', 'extension_write_timeout'):
+            device = Device(fault=fault)
+            try:
+                device.memory[0xFFFFFC10] = 255
+                device.put(0xFFFFFF50, bytes(range(48)))
+                device.put(0xFFFFFC50, bytes([170] * 48))
+                with tempfile.TemporaryDirectory() as temp:
+                    payload = pathlib.Path(temp) / 'synthetic.bin'
+                    payload.write_bytes(bytes([0x2C] * 7 + [0] * 15))
+                    result = device.run('mpc-mpcx-ip-writer', '127.0.0.1', str(payload))
+                self.assertEqual(result.returncode == 0, fault != 'extension_write_timeout', result.stderr)
+                self.assertEqual(device.memory[0xFFFFFCFF], 255)
+                copies = [(a, d) for a, d in device.write_packets if 0xFFFFFC50 <= a < 0xFFFFFC80]
+                if fault in ('extension_bus', 'extension_timeout', 'extension_short'):
+                    self.assertEqual(copies, [])
+                    self.assertEqual(bytes(device.memory[0xFFFFFC50+i] for i in range(48)), bytes([170]*48))
+                elif fault == 'extension_partial':
+                    self.assertEqual([a for a, _ in copies], [0xFFFFFC50, 0xFFFFFC70])
+                elif fault == 'extension_write_timeout':
+                    self.assertEqual(len(copies), 1)
+                    self.assertNotIn('Success!', result.stdout)
+                else:
+                    self.assertEqual(bytes(device.memory[0xFFFFFC50+i] for i in range(48)), bytes(range(48)))
+            finally:
+                device.close()
+
+    def test_unreachable_writer_does_not_write(self):
+        device = Device()
+        try:
+            device.running = False
+            device.thread.join()
+            with tempfile.TemporaryDirectory() as temp:
+                payload = pathlib.Path(temp) / 'synthetic.bin'
+                payload.write_bytes(bytes([0x2C] * 7 + [0] * 15))
+                started = time.monotonic()
+                result = device.run('mpc-mpcx-ip-writer', '127.0.0.1', str(payload))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('timeout', result.stderr)
+            self.assertLess(time.monotonic() - started, 3)
+            self.assertEqual(device.write_packets, [])
+            self.assertNotIn('Success!', result.stdout)
+        finally:
+            device.close()
+
     def test_generation_specific_parameters_and_units(self):
         for xg in (False, True):
             device = Device(xg=xg)

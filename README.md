@@ -11,16 +11,8 @@ The installed command set contains five commands:
 - `mpc-mpcx-ip-writer` — write MPC/MPCX EEPROM data and optionally change EEPROM/current IP addresses.
 - `mpc-mpcx-ip-reader` — read MPC/MPCX information and always display current/EEPROM MAC and IP addresses.
 - `mpc-mpcx-ip-command` — advanced MPC/MPCX, IP, and low-level RBCP operations.
-- `sitcp-sitcpxg-ip-writer` — IP-only writer for SiTCP / SiTCP-XG.
+- `sitcp-sitcpxg-ip-writer` — configure IP addresses for SiTCP / SiTCP-XG.
 - `sitcp-sitcpxg-ip-reader` — IP-only reader for SiTCP / SiTCP-XG.
-
-The MPC/MPCX reader displays General, TCP, Client/server, Control and
-Transmission settings for both generations, separately for RAM and EEPROM.
-Decimal values retain their hexadecimal equivalents. Normal SiTCP has no
-XG transmission-rate setting; the displayed XG rate is a configured limit,
-not measured throughput.
-
-Reader TCP parameter labels follow the official Utility, including `TCP Keep Alive Enabled` and both Keep Alive timers. Hexadecimal values and time conversions are retained.
 
 ## Quick installation
 
@@ -75,7 +67,8 @@ Use these when only SiTCP / SiTCP-XG IP configuration is needed and no MPC/MPCX 
 ./bin/sitcp-sitcpxg-ip-writer 192.168.2.161 192.168.2.170
 ```
 
-No MPC/MPCX file is needed. IP writing follows the official Utility setting-block sequence, retaining the values read for every field except the requested IP. The EEPROM prefix is read and written back unchanged, including any license bytes there. Use `--current` to change the current IP; the default changes EEPROM only.
+No MPC/MPCX file is needed. The default changes EEPROM only; use `--current`
+to change the active IP. Unspecified settings and license data are preserved.
 
 ## How to use the advanced command
 
@@ -110,7 +103,7 @@ Set both EEPROM/default and current/runtime IP addresses:
 
 Default RBCP UDP port is `4660`; default timeout is `3` seconds. These defaults are also shown by `--help`.
 
-Writer options:
+Common writer options (see `--help` for all options):
 
 ```text
 --clear              Clear EEPROM only; no file/IP changes (default: off)
@@ -123,7 +116,22 @@ Writer options:
 
 When both options are given, EEPROM IP is set first and current IP last. The writer reconnects to the new IP and verifies the result.
 
-The writer displays runtime and EEPROM MAC/IP before and after the operation. Success is printed only after all requested operations and verification complete. Use the reader for full register dumps. MPC/MPCX payload type is determined from the 22-byte contents, not the filename extension.
+The writer displays runtime and EEPROM MAC/IP before and after the operation. Success is printed only after all requested operations and verification complete. Use the reader for full register dumps.
+
+### TCP/UDP port options
+
+The standalone IP writer can set IP, TCP data port and UDP/RBCP port together:
+
+```bash
+./bin/sitcp-sitcpxg-ip-writer 192.168.2.187 192.168.2.188 --eeprom --tcp-port 24 --udp-port 4660
+```
+
+`--tcp-port N` and `--udp-port N` accept 1..65535; the default is to preserve
+existing ports. `--port N` selects the current communication port (default:
+4660). It does not change the stored port. For `--current`, the writer verifies
+through the new IP and requested UDP port; EEPROM changes leave the current
+endpoint in place. All other settings and license bytes are preserved. These
+port options belong to the standalone writer. Output formatting is unchanged.
 
 ### Normal MPC writing
 
@@ -137,7 +145,7 @@ for the reference capture and compatibility limits.
 
 ### MPCX writing after clearing EEPROM
 
-Preview the planned changes without writing:
+Preview the base MPCX image without writing:
 
 ```bash
 ./bin/mpc-mpcx-ip-command mpcx-plan DEVICE_IP FILE.mpcx

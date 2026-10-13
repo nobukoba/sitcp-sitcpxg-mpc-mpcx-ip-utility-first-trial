@@ -45,7 +45,7 @@ class InitializationTests(unittest.TestCase):
             self.assertEqual(region(device, 0xFFFFFF00, 80), runtime)
             writes = [req for req in device.requests if req[0] == 0x80]
             self.assertEqual(writes, [(0x80, 0xFFFFFCFF, 1)] +
-                             [(0x80, 0xFFFFFC00 + i, 16) for i in range(0, 80, 16)] +
+                             [(0x80, 0xFFFFFC00, 80)] +
                              [(0x80, 0xFFFFFCFF, 1)])
             self.assertEqual(device.memory[0xFFFFFCFF], 255)
             first_write = next(i for i, req in enumerate(device.requests) if req[0] == 0x80)
@@ -65,7 +65,7 @@ class InitializationTests(unittest.TestCase):
             self.assertEqual(region(device, 0xFFFFFC18, 56), before[24:])
             self.assertEqual(region(device, 0xFFFFFC40, 2), b'\x03\xe8')
             writes = [req for req in device.requests if req[0] == 0x80 and req[1] != 0xFFFFFCFF]
-            self.assertEqual(writes, [(0x80, 0xFFFFFC00, 16), (0x80, 0xFFFFFC10, 8)])
+            self.assertEqual(writes, [(0x80, 0xFFFFFC00, 24)])
         finally:
             device.close()
 
@@ -118,7 +118,7 @@ class InitializationTests(unittest.TestCase):
                 writes = [req for req in device.requests if req[0] == 0x80]
                 self.assertEqual(writes[-1], (0x80, 0xFFFFFCFF, 1))
                 self.assertEqual(writes.count((0x80, 0xFFFFFCFF, 1)), 2)
-                self.assertEqual(writes.count((0x80, 0xFFFFFC20, 16)),
+                self.assertEqual(writes.count((0x80, 0xFFFFFC00, 80)),
                                  0 if fault == 'enable_timeout' else 1)
             finally:
                 device.close()
@@ -132,7 +132,7 @@ class InitializationTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(region(device, 0xFFFFFC18, 4), bytes([192, 0, 2, 42]))
             writes = [req for req in device.requests if req[0] == 0x80]
-            self.assertLess(writes.index((0x80, 0xFFFFFC40, 16)),
+            self.assertLess(writes.index((0x80, 0xFFFFFC00, 80)),
                             writes.index((0x80, 0xFFFFFC18, 40)))
             self.assertLess(writes.index((0x80, 0xFFFFFC18, 40)),
                             writes.index((0x80, 0xFFFFFF18, 40)))

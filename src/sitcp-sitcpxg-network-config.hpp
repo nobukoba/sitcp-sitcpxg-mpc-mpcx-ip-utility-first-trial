@@ -133,11 +133,20 @@ inline void set_eeprom_write_enable(Client& client, bool enabled) {
 
 inline void write_eeprom_ip(const std::string& host,
                             const std::string& new_ip,
-                            uint16_t port, double timeout) {
+                            uint16_t port, double timeout,
+                            uint16_t tcp_port = 0, uint16_t udp_port = 0) {
     Client client(host, port, timeout);
     const std::vector<uint8_t> bytes = parse_ipv4(new_ip);
     std::vector<uint8_t> settings = rbcp::read_retry(client, 0xFFFFFC00u, 64);
     std::copy(bytes.begin(), bytes.end(), settings.begin() + 0x18);
+    if (tcp_port != 0) {
+        settings[0x1C] = static_cast<uint8_t>(tcp_port >> 8);
+        settings[0x1D] = static_cast<uint8_t>(tcp_port);
+    }
+    if (udp_port != 0) {
+        settings[0x22] = static_cast<uint8_t>(udp_port >> 8);
+        settings[0x23] = static_cast<uint8_t>(udp_port);
+    }
     const std::vector<uint8_t> prefix(settings.begin(), settings.begin() + 17);
     const std::vector<uint8_t> parameters(settings.begin() + 0x18, settings.end());
 
@@ -167,13 +176,22 @@ inline void write_eeprom_ip(const std::string& host,
 
 inline void write_current_ip(const std::string& host,
                              const std::string& new_ip,
-                             uint16_t port, double timeout) {
+                             uint16_t port, double timeout,
+                             uint16_t tcp_port = 0, uint16_t udp_port = 0) {
     const std::vector<uint8_t> bytes = parse_ipv4(new_ip);
     Client old_client(host, port, timeout);
     // The captured Utility refreshes the runtime settings twice before writing.
     rbcp::read_retry(old_client, 0xFFFFFF00u, 64);
     std::vector<uint8_t> settings = rbcp::read_retry(old_client, 0xFFFFFF00u, 64);
     std::copy(bytes.begin(), bytes.end(), settings.begin() + 0x18);
+    if (tcp_port != 0) {
+        settings[0x1C] = static_cast<uint8_t>(tcp_port >> 8);
+        settings[0x1D] = static_cast<uint8_t>(tcp_port);
+    }
+    if (udp_port != 0) {
+        settings[0x22] = static_cast<uint8_t>(udp_port >> 8);
+        settings[0x23] = static_cast<uint8_t>(udp_port);
+    }
     const std::vector<uint8_t> prefix(settings.begin(), settings.begin() + 17);
     const std::vector<uint8_t> parameters(settings.begin() + 0x18, settings.end());
 
@@ -195,7 +213,7 @@ inline void write_current_ip(const std::string& host,
 
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    Client new_client(new_ip, port, timeout);
+    Client new_client(new_ip, udp_port == 0 ? port : udp_port, timeout);
     if (rbcp::read_retry(new_client, 0xFFFFFF00u, 64) != settings) {
         throw Error("runtime settings read-back mismatch at new address " + new_ip);
     }

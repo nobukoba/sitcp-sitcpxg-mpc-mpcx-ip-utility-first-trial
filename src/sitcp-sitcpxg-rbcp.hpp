@@ -2,6 +2,7 @@
 
 #include <arpa/inet.h>
 #include <cerrno>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <netdb.h>
@@ -37,7 +38,11 @@ public:
            double timeout = DEFAULT_TIMEOUT)
         : host_(std::move(host)),
           port_(port),
-          timeout_(timeout) {}
+          timeout_(timeout) {
+        if (!std::isfinite(timeout_) || timeout_ <= 0 || timeout_ > 86400) {
+            throw Error("RBCP timeout must be finite and in (0, 86400] seconds");
+        }
+    }
 
     std::vector<uint8_t> read(uint32_t address, size_t length) {
         if (length == 0 || length > 255) {
@@ -86,7 +91,7 @@ private:
         const int getaddrinfo_result = getaddrinfo(
             host_.c_str(), port_string.c_str(), &hints, &result);
         if (getaddrinfo_result != 0) {
-            throw Error(gai_strerror(getaddrinfo_result));
+            throw Error("cannot resolve RBCP target " + host_ + ": " + gai_strerror(getaddrinfo_result));
         }
 
         const int socket_fd = socket(
@@ -97,15 +102,19 @@ private:
             throw Error(strerror(socket_errno));
         }
 
-        const ssize_t sent = sendto(
-            socket_fd, packet.data(), packet.size(), 0,
-            result->ai_addr, result->ai_addrlen);
+        const int connected = connect(socket_fd, result->ai_addr, result->ai_addrlen);
         freeaddrinfo(result);
+        if (connected < 0) {
+            const int connect_errno = errno;
+            close(socket_fd);
+            throw Error("cannot reach RBCP target " + host_ + ": " + strerror(connect_errno));
+        }
+        const ssize_t sent = send(socket_fd, packet.data(), packet.size(), 0);
 
         if (sent != static_cast<ssize_t>(packet.size())) {
             const int send_errno = errno;
             close(socket_fd);
-            throw Error(strerror(send_errno));
+            throw Error("RBCP send failed to " + host_ + ": " + strerror(send_errno));
         }
 
         fd_set read_fds;
@@ -141,7 +150,7 @@ private:
         close(socket_fd);
 
         if (received < 0) {
-            throw Error(strerror(receive_errno));
+            throw Error("RBCP receive failed from " + host_ + ": " + strerror(receive_errno));
         }
         if (received < 8 || reply[0] != 0xFF || reply[2] != id) {
             throw Error("invalid RBCP reply");

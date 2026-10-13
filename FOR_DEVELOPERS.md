@@ -5,9 +5,30 @@
 This repository contains two related but functionally separate C++11 utility groups for SiTCP / SiTCP-XG:
 
 1. MPC/MPCX license/configuration utilities.
-2. SiTCP Utility compatible IP-address-only utilities.
+2. SiTCP Utility compatible IP-address utilities, with optional TCP/UDP port changes in the standalone writer.
 
 They may share low-level RBCP transport code, but they must not share domain logic. Keep three evidence classes distinct when documenting behavior: public Bee Beans Technologies documentation, static analysis of official utilities, and controlled verification with real files/hardware.
+
+## Current implementation and verification status (2026-10-14)
+
+This summary describes the current source; dated comparisons below also retain
+historical observations. Default MPC data writes are whole-image: normal 64,
+MPCX preservation 24, MPCX initialization 80 bytes. Explicit chunks are optional.
+XG initialization additionally attempts three optional 16-byte extension reads,
+copies only complete readable blocks and verifies copied bytes. This extension
+update is simulator-tested; the earlier XG physical initialization comparison
+used the version without extension reads. Normal MPC waits 500 ms after ACK;
+XG programming proceeds after ACK; clear guarantees 500 ms between write starts.
+
+EEPROM IP and TCP/UDP port writes have native-versus-custom physical comparison
+on both generations. Full 128-byte EEPROM comparisons preserve other settings;
+all test images were restored, and final pings were 100/100. Runtime IP/UDP
+migration is simulator-tested, not physically verified. Power-cycle acceptance,
+readable-extension hardware and native failure/lost-ACK paths remain untested.
+Latest full build/test: strict C++11, 45 tests, 73.342 seconds. Later source
+formatting and documentation edits do not change behavior. Publication status and exact revision are recorded in Git history;
+test records below describe the code at each validation stage. Raw licensed captures/backups are
+private; sanitized JSON deliverables are separate from repository contents.
 
 ## Build and compatibility
 
@@ -48,11 +69,11 @@ For development without installation, replace the README's `./bin/` prefix with 
 
 ## Current programs
 
-- `mpc-mpcx-ip-writer` — high-level MPC/MPCX writer; requires an MPC/MPCX file and may additionally set EEPROM/default and current/runtime IP addresses.
+- `mpc-mpcx-ip-writer` — high-level MPC/MPCX programming requires a file and may set EEPROM/current IP; explicit `--clear` is a separate file-free erase mode.
 - `mpc-mpcx-ip-reader` — MPC/MPCX reader; also reports current/EEPROM MAC and IP values.
 - `mpc-mpcx-ip-command` — advanced/diagnostic interface with MPC/MPCX, IP, and low-level RBCP operations.
 - `sitcp-sitcpxg-ip-reader` — IP-only reader, independent of MPC/MPCX payload decoding.
-- `sitcp-sitcpxg-ip-writer` — IP writer using the official Utility setting-block sequence; no license decoding, with non-IP bytes retained unchanged.
+- `sitcp-sitcpxg-ip-writer` — IP writer using the official Utility setting-block sequence; no license decoding; only IP and explicitly requested TCP/UDP ports change.
 
 ## Architectural boundary
 
@@ -68,7 +89,8 @@ IP utility domain:
   EEPROM/default IP read
   EEPROM IP write
   optional current/runtime IP write
-  reconnect/read-back after runtime IP change
+  optional TCP data / UDP-RBCP port changes in the standalone writer
+  reconnect/read-back after runtime IP or UDP-port change
 ```
 
 A common RBCP transport helper may be shared, but MPC/MPCX payload logic must not leak into the standalone IP-only commands.
@@ -238,22 +260,14 @@ A SiTCP-XG target at `192.168.2.187` was observed with a valid XG
 identifier (`0x58544350`) and an MPCX payload that reconstructs exactly
 from `FC00..FC0F + FC12..FC17`.  Its EEPROM nevertheless contains:
 
-```text
-FC40..FC4F =
-83 A8 9C 99 A6 54 54 35 34 4C 38 39 FD 57 08 09
-```
+A historical raw observation is retained privately rather than distributing
+license-derived bytes in this guide. The leading rate field was `0x83A8`.
 
 A non-destructive read of `0xFFFFFF40..0xFFFFFF4F` returned the same
 16 bytes.  Therefore these bytes are not merely an unread EEPROM remnant;
 they are also visible in the corresponding runtime register window.
 
-The first 12 bytes,
-
-```text
-83 A8 9C 99 A6 54 54 35 34 4C 38 39
-```
-
-also exactly match the 12-byte portion observed in multiple verified normal
+The first 12 bytes matched the common part of multiple verified normal
 SiTCP `.mpc` files, whose layout is `MAC[6] + common[12] + varying[4]`.
 This is strong empirical evidence that the observed `FC40..FC4F` contents
 have a normal-MPC-formatted origin.  It is not proof of the device's write
@@ -268,8 +282,8 @@ the observed bytes.
 The public XG register map documents `FC40..FC41` as the EEPROM initial
 value for the transmission-rate register, with a documented range of
 1..10000.  The observed raw value `0x83A8` is 33704 and is outside that
-range.  Do not report it as an effective rate of 33704 Mbps.  More
-do not normalize, clear, or replace `FC40..FC4F` during ordinary MPCX
+range. Do not report it as an effective rate of 33704 Mbps. Do not
+normalize, clear, or replace `FC40..FC4F` during ordinary MPCX
 programming. Initialization selected by FC10 bit7 is the explicit exception:
 it copies runtime settings through FC4F before overlaying the MPCX payload.
 
@@ -282,14 +296,17 @@ not a verified fact.
 When both IP options are given, EEPROM IP is written first and current/runtime IP last, preserving reachability at the original IP until all earlier operations finish. After runtime IP changes, reconnect to the new IP and verify by read-back. A lost acknowledgement may mean the IP has already changed; do not blindly retry the write.
 
 
-1. Read the current EEPROM image and independently detect the target generation.
+1. Independently detect the target generation, then read its EEPROM programming record.
 2. For MPCX, prepare either the 24-byte preservation image or the complete
    80-byte RAM initialization image as described below. For normal MPC, prepare
    the separate 64-byte FC10 record described in the official-writer comparison.
 3. Release EEPROM write protection.
-4. Write MPCX images in 16-byte blocks; normal MPC uses one 64-byte FC10 write.
-5. Restore protection, including error paths where possible.
-6. Read the programmed image again.
+4. By default write the complete MPC/MPCX image in one transfer. Explicit
+   `--write-chunk-size 16` selects 16-byte blocks; image contents/ranges are unchanged.
+5. For XG initialization only, read FF50/60/70 in 16-byte blocks and copy each
+   complete readable block to FC50/60/70; skip unreadable source blocks. Restore
+   protection, including error paths where possible.
+6. Read the programmed base image and every copied extension block again.
 7. Compare byte-for-byte and fail on mismatch.
 
 ## Advanced command reference
@@ -312,6 +329,11 @@ ip-write CURRENT_IP NEW_IP [--eeprom|--current] [--port N] [--timeout SEC]
 
 `read` and `ip-read` display the same full runtime/EEPROM report. `ip-write` and the standalone IP writer print before/after MAC/IP and result summaries. The standalone IP reader retains its compact MAC/IP view. `ip-write` defaults to EEPROM and accepts `--current` for the runtime/current address.
 
+Raw `rbcp-write` is a single diagnostic write transaction, not a high-level
+configuration operation: it does not automatically restore EEPROM protection
+or perform read-back. The clear guard applies to advanced `clear`, not arbitrary
+`rbcp-write`. High-level writers and clear retain their verification/cleanup.
+
 ## IP utility design
 
 The standalone IP-only CLI is:
@@ -326,11 +348,11 @@ The IP tools must not classify, reconstruct, or validate MPC/MPCX license payloa
 Requirements:
 
 - reader reports current/runtime and EEPROM/default network configuration;
-- writer changes only IP-related state;
+- writer changes IP and, only when explicitly requested in the standalone CLI, TCP/UDP ports;
 - EEPROM is the default write target;
 - changing current/runtime IP requires an explicit option;
 - writer performs read-back verification;
-- after changing current/runtime IP, reconnect to `NEW_IP` and verify when possible;
+- after changing current/runtime IP or UDP port, reconnect to the new endpoint and require complete read-back verification;
 - normal SiTCP and SiTCP-XG behavior must be tested independently.
 
 ## Testing
@@ -360,10 +382,11 @@ Hardware-destructive tests should only be run on a controlled target where recov
 | XG 16 + preserve 2 + 6 mapping | not found | yes | yes |
 | normal 6 + 16 mapping | not found in reviewed material | investigated | yes |
 | SiTCP-XG Identifier generation detection | yes | implemented | verified on XG hardware |
-| IP-only current/runtime read mechanism | to investigate | to investigate | not yet verified |
-| IP-only EEPROM/default read mechanism | to investigate | to investigate | not yet verified |
-| IP-only EEPROM write mechanism | to investigate | to investigate | not yet verified |
-| IP-only runtime write/reconnect | to investigate | to investigate | not yet verified |
+| Current/runtime IP/MAC read | register map | implemented | both generations |
+| EEPROM/default IP/MAC read | register map | implemented | both generations |
+| EEPROM IP write | guide distinguishes EEPROM access | native 17+40 sequence | both generations; XG actual IP change |
+| EEPROM TCP/UDP port write | General-tab settings | native 17+40 sequence | both generations; actual port change |
+| Runtime IP/UDP write and reconnect | current access described | captured sequence; simulator migration | physical migration untested |
 
 ## Remaining work
 
@@ -376,10 +399,9 @@ Hardware-destructive tests should only be run on a controlled target where recov
 
 ### IP utility
 
-- identify and analyze official SiTCP Utility behavior specific to IP changes;
-- verify EEPROM IP write/read-back;
-- verify optional current/runtime IP change and reconnect;
-- test normal SiTCP and SiTCP-XG independently.
+- physically verify runtime IP/UDP changes and reconnect on both generations;
+- verify changed EEPROM IP/ports after a controlled power cycle;
+- characterize native failure/lost-ACK behavior; retain no-retry safeguards meanwhile.
 
 ## MPC/MPCX file inspection and MAC extraction
 
@@ -413,7 +435,7 @@ visible. Register IP fields use the shared network helper to append eight
 uppercase hexadecimal digits in network byte order (including zero padding),
 e.g. `192.168.10.10 (0xC0A80A0A)`; this includes server and standalone IP views.
 Out-of-range rates retain their raw value without claiming Mbps.
-Normal SiTCP retains raw dumps without applying the XG parameter map.
+Normal SiTCP uses its own parameter decoder and raw dumps, never the XG map.
 
 A diagnostic block bus error triggers byte-by-byte reads of that block. Each
 rejected byte is marked unreadable and printed as `??`, with its address on
@@ -483,7 +505,7 @@ Observed x86 virtual addresses:
   and writes to FC00.
 - `0x40928f..0x4093a6`: also attempts optional extension reads FF50..FF7F
   in 16-byte blocks and writes corresponding EEPROM blocks if readable.
-  This extension behavior is intentionally not implemented in the custom tool.
+  This extension behavior is now implemented; see the 2026-10-14 update below.
 - The fixed-default branch at `0x407c7f..0x407cef` is in the legacy normal
   SiTCP writer: it reads 40 bytes at FF18, or uses a table at `0x417bc0`.
   That is not evidence for a SiTCP-XG fallback table. The earlier broad claim
@@ -496,11 +518,13 @@ verified 80-byte copy; no rate normalization occurs. A failure to obtain the
 image aborts before enabling writes. XG with bit7 clear retains the existing
 24-byte path, even if the rate looks invalid. The later normal-MPC compatibility
 update below is separate and does not change this MPCX initialization policy.
-The writer and `mpcx-plan` share image preparation. `verify` still checks the
+The writer and `mpcx-plan` share mandatory base-image preparation. The read-only
+plan does not probe or predict optional extension copies; writer-time reads
+determine those separately. `verify` still checks the
 license payload only, whereas the writer verifies every byte it programs.
 
 Additional safety differences from the official GUI are exact independent XG
-identifier validation, runtime RESET-bit rejection, 16-byte write chunks,
+identifier validation, runtime RESET-bit rejection, optional 16-byte write chunks,
 mandatory read-back verification, and protection restoration on error. The
 write-enable operation itself is inside the cleanup scope so a lost enable ACK
 still triggers a protection attempt. No destructive write is retried.
@@ -578,7 +602,7 @@ the success dialog waits for the user.
 The captured normal writer waits approximately 500 ms between RBCP operations.
 The custom normal-MPC path now retains a 500 ms interval after enable and data
 writing, before protection cleanup following an ambiguous ACK, and after
-protection before read-back. MPCX pacing/chunking remains unchanged. This is
+protection before read-back. At that stage MPCX pacing/chunking was unchanged. This is
 observed software behavior, not a claim that physical EEPROM settling was tested.
 
 The captured data and narrowly scoped static analysis establish this normal
@@ -610,7 +634,8 @@ The previous implementation preserved erased settings/control and programmed
 80 bytes at FC00. The independent capture-based test failed against that
 implementation and passes after this correction. Generation detection now
 precedes selecting the normal 64-byte versus XG 80-byte EEPROM read window.
-The MPCX image preparation and its 16-byte write chunks are unchanged.
+At that comparison stage MPCX image preparation and its 16-byte write chunks
+were unchanged; the later transfer-size option below supersedes the chunk default.
 
 ### Explicit compatibility limits
 
@@ -619,10 +644,32 @@ The official legacy normal branch at `0x407cac..0x407cef` substitutes a fixed
 IP 192.168.10.16. This custom tool deliberately **fails before enabling writes**
 when FF18..FF3F cannot be obtained. It does not automatically substitute that
 table or claim identical error/fallback behavior. The forced-initialization GUI
-checkbox and legacy fallback were not exercised by the captured branch. Existing
-XG optional FF50..FF7F extension behavior remains outside the implementation.
-Physical EEPROM timing, subsequent reboot behavior, and all firmware variants
-remain hardware acceptance items.
+checkbox and legacy fallback were not exercised by this synthetic capture.
+At that historical stage, XG optional extension copying was not implemented;
+the later update implements it with simulator coverage.
+At that stage physical EEPROM timing was not checked. Later actual captures
+measure write-start timing; reboot acceptance and all firmware variants remain
+unverified.
+
+### Normal-SiTCP fixed fallback settings (static evidence)
+
+The installed native Writer 0.4.1-2-gc782 table at VA 0x417BC0 contains 40
+bytes used for FC18..FC3F if the normal initialization RAM read fails.
+Decoded values below use the normal-SiTCP register map. This failure branch
+has not been exercised on hardware; the custom writer still stops instead.
+
+| Setting | Native fixed value |
+| --- | --- |
+| IP | 192.168.10.16 |
+| TCP data port / command port | 24 / 23 |
+| UDP/RBCP port | 4660 |
+| Maximum segment size | 1460 bytes |
+| Keep Alive buffer nonempty / empty | 1000 / 60000 ms |
+| Connect / disconnect timeout | 5000 / 2880000 ms |
+| Reconnect / retransmission timer | 500 / 500 ms |
+
+MAC/license overlays still come from the MPC file. This table is not evidence
+of an XG fallback and is never reused for XG initialization.
 
 ### MPCX regression capture
 
@@ -634,8 +681,9 @@ message used the phrase "default values", but the actual captured FC10..FC11
 and FC18..FC4F bytes came directly from the supplied runtime image, including
 its unusual rate bytes. The protocol bytes, not that generic label, establish
 the image behavior. `tests/reference/official_mpcx_erased.json` independently
-checks the existing custom MPCX image against that capture. Chunking remains
-16 bytes in the custom XG path, versus the official single 80-byte transfer.
+checks the custom MPCX image against that capture. At that stage the custom
+XG path used 16-byte chunks. The current default is a single 80-byte transfer
+when initializing; see the later bulk-default update.
 
 ## Official SiTCP Utility 0.9.0 observation (2026-10-13)
 
@@ -669,7 +717,7 @@ unchanged, including any MPCX license bytes; no license parsing is performed.
 EEPROM protection is restored before a complete 64-byte read-back comparison.
 Runtime prefix failures stop immediately; only a timeout of the final, address-
 changing block is followed by verification at the new IP, without retrying the
-write. Ports remain unchanged; port editing is not exposed by this CLI.
+write. At that stage ports remained unchanged; standalone port options were added in the later update below.
 The existing before/after snapshots and added read-back make the complete
 CLI traffic longer than the GUI trace; the configuration-write sequence matches.
 An enable-ACK timeout now triggers a protection-restoration attempt in the
@@ -777,3 +825,262 @@ After this label update, the strict C++11 build/install and all 38 tests passed
 The Utility-compatible parameter block has a blank line before its TCP Port
 entry and after its final entry, separating it from MAC/IP and raw dumps in
 both runtime and EEPROM displays. No fields or raw bytes were removed.
+
+## Clear write pacing: official comparison and update
+
+Official Writer 0.4.1-2-gc782 was exercised on normal SiTCP at 192.168.10.16.
+Its captured clear sequence matches this repository's erase addresses, sizes
+and values: FCFF=00, eight 16-byte FF writes over FC00..FC7F, then FCFF=FF.
+All ten write ACKs succeeded, and an independent read confirmed 128 erased
+bytes. The selected MPC and all 128 pre-clear bytes were restored afterward;
+runtime stayed unchanged and 100 subsequent pings succeeded. License-bearing
+backups and captures remain private and are not repository contents.
+
+The official write-start gaps were 502.6--516.2 ms. The previous repository
+clear immediately proceeded after ACKs: about 183--184 ms on that device.
+Clear now uses steady_clock and sleep_until to guarantee at least 500 ms
+between write starts, including enable and protection writes. Device ACK time
+counts toward the 500 ms; slow ACKs do not cause an additional full 500 ms wait.
+Failure cleanup uses the same pacing without retrying erase writes.
+Mandatory 128-byte read-back remains; official read-back was not observed
+during erase or within two seconds after protection in this successful capture.
+Failure/lost-ACK behavior of the official GUI and power-cycle acceptance were
+not tested. At that stage only the earlier version had been exercised on hardware; the new pacing
+is checked by simulator timing assertions for both generations and failure paths.
+Validation after the pacing update: strict C++11 build/install succeeded and
+all 38 tests passed in 68.252 seconds. The installed local binaries include
+the pacing update. No additional physical clear was performed at that stage; later XG comparison used the updated clear implementation.
+
+## MPC/MPCX bulk default and explicit chunks
+
+At the user's request, the programming transfer defaults to one complete
+prepared image: normal MPC 64 bytes at FC10, preservation MPCX 24 bytes at
+FC00, and initialization MPCX 80 bytes at FC00. The initialized MPCX image
+is not enlarged merely to reach 80 bytes; unmodified configuration remains
+outside its programming range. Existing generation/initialization validation
+and byte construction are unchanged.
+
+`--write-chunk-size N` accepts a positive decimal integer, 1..255 bytes;
+16 reproduces the previous MPCX split mode (24 bytes becomes 16+8, 80 bytes
+becomes five 16-byte writes). Normal MPC 64 bytes becomes four 16-byte writes.
+Both modes verify every programmed byte and restore protection after failures
+without retrying data writes. The high-level wrapper forwards the value before
+its IP overrides. Invalid options and clear/size combinations fail before
+network reads. IP transfer sizes and fixed clear blocks/pacing are unaffected.
+
+Tests compare bulk and split addresses, lengths, concatenated payloads and
+final EEPROM images for all three image sizes. Bulk and split failures test
+protection cleanup and no retries. The official erased-MPCX synthetic fixture
+also checks the default FC00/80 transfer. No new physical-device writes are
+performed as part of this option validation.
+Strict C++11 build/install and all 41 tests passed (64.481 seconds). Both
+bulk and split failures preserve the protection/no-retry guarantees.
+
+## XG physical comparison: preservation and erased initialization (2026-10-14)
+
+An XG device and its matching licensed MPCX file were tested using official
+Writer 0.4.1-2-gc782 and the current bulk-default CLI. All 128 EEPROM bytes and
+80 runtime bytes were backed up privately. The native preservation path and
+the CLI both wrote FCFF=00, FC00/24, FCFF=FF, with identical data and unchanged
+final EEPROM. This directly confirms that the initialized preservation image
+is 24 bytes, not an unconditional 80-byte write.
+
+For initialization, both runs began with all 128 EEPROM bytes erased. Native
+Initialize EEPROM wrote FC00/80 containing RAM FF00..FF4F overlaid with the
+MPCX payload at FC00..FC0F and MAC at FC12..FC17. The CLI's default FC00/80
+write matched native addresses, lengths and payload exactly; all 128 resulting
+EEPROM bytes matched. Control and settings were copied from RAM, including
+the tested 10000-Mbps configured rate. Runtime remained unchanged.
+
+Native initialization attempted three 16-byte reads at FF50, FF60 and FF70.
+Each returned RBCP C9 bus error with zero length. The GUI reported successful
+programming plus three extension-read warnings; no extension EEPROM write
+occurred. The CLI used for this physical comparison skipped these optional reads. FC50..FC7F stayed FF after clear
+in both runs. This establishes only the inaccessible-extension case; a device
+with readable optional extensions was not covered by that CLI version; the current synthetic coverage is described below.
+
+Pacing remains different: native preservation write-start intervals were
+509.1 and 512.6 ms; CLI intervals were 3.3 and 265.2 ms. Native initialization
+enable-to-data was 515.0 ms, versus CLI 2.3 ms. Data-to-protect was 2530.5 ms
+native (including optional reads) and 881.9 ms CLI. Device ACK time accounts
+for much of the CLI data interval. Do not claim packet-for-packet timing
+equivalence or apply the measured clear pacing to XG programming implicitly.
+
+Initialization completed with 100/100 successful pings. All 128 pre-test EEPROM
+bytes and runtime were restored; final ping was also 100/100. No power cycle or
+native failure/lost-ACK test was performed. UI initialization was disabled at
+completion. Actual licensed payloads, captures and backup images remain in
+private working storage, outside this repository. Capture selection was
+corrected to the actual route before the successful packet comparison.
+
+
+## Consolidated verification and optional-extension update (2026-10-14)
+
+The following separates actual hardware evidence from synthetic failure tests.
+Official versions: MPC Writer XG 0.4.1-2-gc782 and Utility 0.9.0.
+
+| Operation | Evidence and result | Remaining limits |
+| --- | --- | --- |
+| Normal MPC | Actual device: full prepared FC10/64 record verified; native synthetic record agrees; control FF became 01, license preserved; ping 100/100 | No power-cycle test; previous ping instability was not reproduced |
+| Normal clear | Both actual tools erase FC00..7F as eight 16-byte FF blocks; native gaps 502.6–516.2 ms; full restoration and ping 100/100 | Native failure/lost-ACK behavior untested |
+| Clear pacing update | Monotonic minimum 500 ms between write starts; subsequently used during actual XG comparison | Simulated failures test cleanup pacing; no deliberate hardware communication failure |
+| Utility EEPROM IP | Actual native and custom same-value write: enable, FC00/17, FC18/40, protect agree byte-for-byte; all 128 bytes preserved; ping 100/100 | Native/custom comparison did not migrate the active runtime IP |
+| Custom EEPROM IP | Actual default IP changed to the runtime IP; only two differing IP bytes changed; RAM unchanged; ping 100/100 | No power-cycle verification |
+| XG preservation | Actual native/custom FC00/24 data and final 128 EEPROM bytes agree | Native ~500-ms pacing differs from custom ACK-paced programming |
+| XG initialization | Both begin erased; actual FC00/80 data and all final 128 bytes agree; RAM unchanged, configured rate 10000 retained; ping 100/100 and complete restoration | Additional FF50/60/70 reads all returned C9 with zero length; readable extension hardware untested |
+| Reader | Synthetic register maps, decimal/hex, raw bytes, partial bus-error recovery and native label comparison | Reported transmission rate is a setting, not measured throughput |
+
+Earlier EEPROM FF counts are recorded in the sanitized old-ff-summary.json.
+Normal EEPROM had 54 FF bytes in its 80-byte view, including unset settings;
+this is an observation, not proof of the cause of historical ping loss.
+TCP Keep Alive affects TCP sessions and does not explain ICMP ping directly.
+Actual licensed captures and backups are private and excluded from Git and
+public archives. Sanitized summaries are delivered alongside this repository.
+XG capture was repeated on the actual Wi-Fi route after an initial incorrect
+interface selection; only the corrected capture supports packet comparisons.
+
+### Current optional extension policy
+
+Only XG initialization (FC10 bit7 set) attempts FF50, FF60, FF70, each 16 bytes,
+after programming the mandatory 80-byte image, before restoring protection.
+Each completely read block is copied to FC50, FC60, FC70 respectively. A bus
+error, exhausted read timeout, short reply or other transport read failure
+skips that source block; no fabricated bytes or erase is substituted. Other
+blocks are still tried. Preservation MPCX and normal MPC never copy extensions.
+The meanings of these optional registers remain unidentified; raw copying
+follows observed native behavior, without decoding or assigning guessed names.
+Success output remains unchanged. A destination write failure is fatal, causes
+protection cleanup, and is never retried. Every copied block is read back after
+protection; a mismatch or failed verification prevents success. Explicit chunk
+size applies to extension data too, defaulting to a whole 16-byte block.
+This new behavior is validated synthetically for readable, partially readable,
+bus-error, short-reply and timeout sources, and ambiguous extension-write ACK.
+It has not yet been rerun on real hardware; prior real tests used the version
+which skipped optional reads. No new hardware writes were made for this update.
+
+### Unreachable targets and ambiguous operations
+
+Shared transport validates a finite timeout in (0, 86400] seconds. UDP sockets
+are connected to the resolved peer, filtering responses from other endpoints
+and allowing available network errors to be surfaced. Resolution, send and
+receive failures identify the target; no response produces a bounded timeout.
+Read timeouts may be retried up to three times per read, not indefinitely.
+Initial snapshot or generation detection failure stops before enabling writes.
+A successful snapshot does not guarantee the device stays reachable: later
+write failures still require best-effort protection restoration, no destructive
+retry, and no success message. Protection cannot be guaranteed if the network
+remains down. Optional source failures are tolerated only for extension reads;
+mandatory base-image reads and final verification remain fatal. No-response
+writer tests verify a nonzero exit, bounded completion and zero write packets.
+
+
+Validation at the optional-extension/transport update stage: strict C++11 build/install passed; all 43 integration tests passed in 66.123 seconds. The subsequent port update passed 45 tests, as noted below. This records validation before the subsequent port update.
+
+## Physical XG EEPROM IP rewrite comparison (2026-10-14)
+
+Official SiTCP Utility 0.9.0 and the current standalone IP writer were tested
+on the XG device at 192.168.2.187, MAC 7C:F0:98:01:21:F0. EEPROM IP was changed
+to 192.168.2.188 while runtime remained at 192.168.2.187. TCP data port 24 and
+UDP port 4660 were retained. This is an actual address change, not a same-value
+write. Complete 128-byte EEPROM and 80-byte runtime backups were saved privately.
+
+Native Utility changed only the requested IP in the expected full image.
+The baseline was restored before repeating the change with the custom writer.
+Native and custom resulting EEPROM images matched across all 128 bytes; all
+runtime bytes remained unchanged. Captured write addresses, lengths and payloads
+matched exactly: FCFF/1 enable=00, FC00/17, FC18/40, FCFF/1 protect=FF.
+Native write-start gaps were 2.3, 188.5, 440.6 ms; custom gaps were 2.9, 192.8,
+442.1 ms. This confirms the Utility-compatible sequence on this XG hardware;
+it does not establish exact equality of all reads, GUI traffic or timing.
+
+EEPROM was finally restored to 192.168.2.187, with all 128 bytes identical to
+the original backup and all 80 runtime bytes unchanged. Final ping: 100 sent,
+100 received, zero loss, maximum RTT 9 ms. The Utility write field and read
+result were refreshed to the restored IP. No clear, license programming,
+runtime IP migration, reset or power cycle was performed. Raw licensed captures
+remain private. Sanitized evidence: ../xg-utility-ip-test.json.
+
+Utility 0.9.0 displayed normal-style TCP Command Port and Re-Connect labels
+on this XG device; successful write compatibility does not validate its XG
+parameter decoding. Our generation-specific reader map remains separate.
+
+
+## Closer standalone IP Utility behavior (2026-10-14)
+
+The verified native IP-write sequence was already implemented for normal SiTCP
+and XG. This update adds the native General tab's configurable TCP data port
+and UDP port to the standalone CLI via --tcp-port / --udp-port. Existing calls
+remain IP-only; omitted options preserve the read settings. --port still means
+the current RBCP transport destination. MPC wrapper IP operations and advanced
+ip-write continue to preserve ports through default helper arguments.
+
+Only explicitly selected bytes are changed: IP 18..1B, TCP data port 1C..1D,
+UDP/RBCP port 22..23. Shared helpers keep EEPROM FC00/64 read, enable, FC00/17,
+FC18/40, protect, complete 64-byte verification; runtime retains two FF00/64
+reads, FF00/17 and FF18/40 writes. There is no added 500-ms delay: actual native
+Utility captures progress with ACKs, unlike native MPC Writer pacing.
+Runtime UDP changes reconnect and verify at the new IP/UDP endpoint, then use
+that endpoint for the compact after snapshot. EEPROM port changes verify via
+the unchanged runtime endpoint. Invalid IP/port options fail before network
+access. No default-address fallback is introduced: no such Utility failure
+behavior has been established. Protection cleanup, no destructive retries and
+mandatory verification remain intentional safeguards. Compact output unchanged.
+
+Synthetic tests cover both generations and destinations, full preservation of
+all nonselected bytes, native write lengths, and a mock device actually moving
+its UDP socket after the runtime parameters write. Invalid port values and
+malformed IPs are rejected without any device request. At this implementation stage, new port-changing paths were simulator-only.
+The following physical comparison subsequently verified EEPROM port changes
+on both generations. Runtime endpoint migration remains simulator-only.
+Validation: strict C++11 build/install passed and all 45 integration tests passed in 73.342 seconds. Local installed binaries include the validated changes; publication revision is recorded in Git history.
+
+## Physical EEPROM TCP/UDP port comparison on both generations (2026-10-14)
+
+Official Utility 0.9.0 and the current standalone IP writer changed EEPROM
+TCP data port 24 to 25 and UDP/RBCP port 4660 to 4661, with IP unchanged,
+on normal SiTCP at 192.168.10.16 and SiTCP-XG at 192.168.2.187. Each device
+had a private 128-byte EEPROM backup and a complete runtime backup (64 normal,
+80 XG). Baseline was restored before the custom test, making the two starting
+states identical. Only requested TCP/UDP bytes changed; MAC, IP, license and
+all other settings were preserved. All 128 resulting bytes agreed between
+native Utility and the custom writer on both devices.
+
+Actual captures agree on all four write addresses, lengths and payloads:
+FCFF/1=00, FC00/17, FC18/40, FCFF/1=FF. Write-start gaps in milliseconds:
+
+| Device | Native | Custom |
+| --- | --- | --- |
+| Normal SiTCP | 0.4, 195.2, 457.1 | 1.8, 198.8, 462.3 |
+| SiTCP-XG | 1.6, 188.6, 444.2 | 1.7, 188.7, 442.2 |
+
+All runtime bytes remained unchanged. Both EEPROM images were fully restored
+to their original 128 bytes, including TCP 24 and UDP 4660. Final ping was
+100/100 on each device; maximum RTT was 14 ms normal and 5 ms XG. Captures
+used the actual Ethernet/Wi-Fi routes and were stopped after comparison.
+Sanitized summaries: ../normal-utility-port-test.json and
+../xg-utility-port-test.json. Licensed capture bytes and backups remain private.
+
+This verifies EEPROM port storage and native write compatibility. Runtime
+port migration, TCP data transfer on the new port and power-cycle loading of
+the changed EEPROM ports were not tested. Earlier statements that optional
+port editing was only simulator-tested refer to the pre-test implementation;
+EEPROM port changes now have direct hardware evidence on both generations.
+
+
+## Documentation organization (2026-10-14)
+
+README.md and README.ja.md contain installation, usage, CLI defaults, option
+semantics, visible output and warnings needed to operate the tools. TCP/UDP port
+examples are in the README appendix; transfer-size examples remain in CLI help
+and this developer guide, not README. Protocol block sizes,
+register maps, clear timing, optional extension rules, native comparisons,
+failure semantics and test evidence remain in the technical sections above.
+MPC/MPCX selection is based on the 22-byte payload, never its filename suffix.
+The source and verified hardware behavior were not changed by this cleanup.
+
+
+## Standalone IP writer usage reference
+
+TCP/UDP port option descriptions and examples are in the README appendix
+([English](README.md#tcpudp-port-options), [Japanese](README.ja.md#tcpudpポートの指定)).
+Protocol sequences and verification evidence remain in the technical sections above.

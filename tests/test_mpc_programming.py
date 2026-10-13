@@ -27,6 +27,64 @@ def write_mpc(device, *options):
 
 
 class MpcProgrammingTests(unittest.TestCase):
+    def test_bulk_and_16_byte_modes_have_identical_images(self):
+        xg_reference = json.loads((ROOT / 'tests/reference/official_mpcx_erased.json').read_text())
+        xg_payload = bytes.fromhex(xg_reference['synthetic_payload'])
+        for xg, erased, base, size in ((False, False, 0xFFFFFC10, 64),
+                                      (True, False, 0xFFFFFC00, 24),
+                                      (True, True, 0xFFFFFC00, 80)):
+            results = []
+            sent = []
+            for options in ((), ('--write-chunk-size', '16')):
+                device = Device(xg=xg)
+                try:
+                    if erased:
+                        device.put(0xFFFFFC00, bytes([255] * 128))
+                    result = write_payload(device, xg_payload if xg else PAYLOAD, *options)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    data = [(address, payload) for address, payload in device.write_packets
+                            if address != 0xFFFFFCFF]
+                    expected_lengths = [size] if not options else [min(16, size-i) for i in range(0,size,16)]
+                    self.assertEqual([len(payload) for _, payload in data], expected_lengths)
+                    self.assertEqual([address for address, _ in data],
+                                     [base] if not options else [base+i for i in range(0,size,16)])
+                    sent.append(b''.join(payload for _, payload in data))
+                    results.append(region(device, 0xFFFFFC00, 128))
+                    self.assertEqual(device.memory[0xFFFFFCFF], 255)
+                finally:
+                    device.close()
+            self.assertEqual(results[0], results[1])
+            self.assertEqual(sent[0], sent[1])
+
+    def test_invalid_chunk_options_abort_before_device_access(self):
+        for options in (('--write-chunk-size','0'), ('--write-chunk-size','256'),
+                        ('--write-chunk-size','-1'), ('--write-chunk-size','16x'),
+                        ('--write-chunk-size',), ('--clear','--write-chunk-size','16')):
+            device = Device(xg=False)
+            try:
+                result = write_mpc(device, *options)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(device.requests, [])
+            finally:
+                device.close()
+
+    def test_split_xg_failure_restores_protection_without_retry(self):
+        reference = json.loads((ROOT / 'tests/reference/official_mpcx_erased.json').read_text())
+        for fault in ('write_bus', 'write_timeout', 'verify_mismatch', 'enable_timeout'):
+            device = Device(xg=True, fault=fault)
+            try:
+                device.put(0xFFFFFC00, bytes([255] * 128))
+                result = write_payload(device, bytes.fromhex(reference['synthetic_payload']),
+                                       '--write-chunk-size', '16')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(device.memory[0xFFFFFCFF], 255)
+                writes = [r for r in device.requests if r[0] == 0x80]
+                self.assertEqual(writes[-1], (0x80,0xFFFFFCFF,1))
+                self.assertEqual(writes.count((0x80,0xFFFFFC20,16)),
+                                 0 if fault == 'enable_timeout' else 1)
+            finally:
+                device.close()
+
     def test_normal_write_pacing_matches_observed_reference(self):
         device = Device(xg=False)
         try:
@@ -61,7 +119,8 @@ class MpcProgrammingTests(unittest.TestCase):
 
     def test_mpcx_image_matches_official_capture(self):
         reference = json.loads((ROOT / 'tests/reference/official_mpcx_erased.json').read_text())
-        device = Device(xg=True)
+        # The captured native reference rejected all optional extension reads.
+        device = Device(xg=True, fault='extension_bus')
         try:
             device.put(0xFFFFFF00, bytes.fromhex(reference['runtime_before']))
             device.put(0xFFFFFC00, bytes.fromhex(reference['eeprom_before']))
@@ -69,6 +128,8 @@ class MpcProgrammingTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(region(device, 0xFFFFFC00, 128),
                              bytes.fromhex(reference['eeprom_after']))
+            self.assertEqual([r for r in device.requests if r[0] == 0x80 and r[1] != 0xFFFFFCFF],
+                             [(0x80, 0xFFFFFC00, 80)])
             self.assertEqual(device.memory[0xFFFFFCFF], 255)
         finally:
             device.close()

@@ -11,13 +11,8 @@ RBCPを使ってSiTCP / SiTCP-XGを設定する、試験的なC++11ユーティ�
 - `mpc-mpcx-ip-writer` — MPC/MPCXのEEPROMデータを書き込み、必要に応じてEEPROMと現在のIPアドレスを変更します。
 - `mpc-mpcx-ip-reader` — MPC/MPCX情報を読み取り、現在とEEPROMのMAC/IPアドレスを表示します。
 - `mpc-mpcx-ip-command` — MPC/MPCX、IP設定、低レベルRBCP操作の詳細コマンドです。
-- `sitcp-sitcpxg-ip-writer` — SiTCP / SiTCP-XGのIP設定専用writerです。
+- `sitcp-sitcpxg-ip-writer` — SiTCP / SiTCP-XGのIPアドレスを設定します。
 - `sitcp-sitcpxg-ip-reader` — SiTCP / SiTCP-XGのIP設定専用readerです。
-
-MPC/MPCX readerは両世代で、一般設定・TCP・接続先サーバー・制御・送信設定をRAMとEEPROMに分けて表示します。
-十進値と十六進値の併記は維持しています。通常SiTCPにはXGの送信レート設定がなく、XGで表示するレートも実測速度ではなく設定上限です。
-
-readerのTCP項目名は正規Utilityに合わせ、`TCP Keep Alive Enabled`とバッファの有無による2つのKeep Alive時間を並べて表示します。十六進値と時間換算は維持しています。
 
 ## インストール
 
@@ -70,7 +65,8 @@ MPC/MPCXファイルを使用せず、SiTCP / SiTCP-XGのIP設定だけを扱う
 ./bin/sitcp-sitcpxg-ip-writer 192.168.2.161 192.168.2.170
 ```
 
-MPC/MPCXファイルは不要です。IP書き込みは正規Utilityと同じ設定ブロックの手順で行い、指定したIP以外は読み取った値を保持します。EEPROM先頭領域に含まれるライセンスのバイトも、読み取った値のまま書き戻します。現在のIPを変更する場合は`--current`を指定してください。既定ではEEPROMだけを変更します。
+MPC/MPCXファイルは不要です。既定ではEEPROMだけを変更します。現在のIPを変更する場合は
+`--current`を指定してください。指定していない設定とライセンスは保持します。
 
 ## 詳細コマンドの使い方
 
@@ -105,6 +101,8 @@ EEPROMの既定IPと現在のランタイムIPの両方を設定します。
 
 RBCPの既定UDPポートは`4660`、タイムアウトは`3`秒です。`--help`にも既定値が表示されます。
 
+主なオプションです。全オプションは`--help`で確認できます。
+
 | オプション | 内容 |
 | --- | --- |
 | `--clear` | EEPROM消去のみ。ファイル書き込みやIP変更なし（既定: 無効） |
@@ -116,7 +114,21 @@ RBCPの既定UDPポートは`4660`、タイムアウトは`3`秒です。`--help
 
 両方を指定すると、EEPROMのIPを先に設定し、現在のIPを最後に変更します。変更後のIPへ再接続して検証します。
 
-writerは変更前後のランタイム/EEPROMのMAC・IPを表示し、すべての操作と検証が完了すると成功を表示します。全レジスタのダンプはreaderで確認してください。MPC/MPCXの種類は拡張子ではなく22バイトの内容から判定します。
+writerは変更前後のランタイム/EEPROMのMAC・IPを表示し、すべての操作と検証が完了すると成功を表示します。全レジスタのダンプはreaderで確認してください。
+
+### TCP/UDPポートの指定
+
+単独IPライターでIP、TCPデータポート、UDP/RBCPポートをまとめて設定できます。
+
+```bash
+./bin/sitcp-sitcpxg-ip-writer 192.168.2.187 192.168.2.188 --eeprom --tcp-port 24 --udp-port 4660
+```
+
+`--tcp-port N`と`--udp-port N`は1～65535を指定でき、省略時は既存値を保持します。
+`--port N`は現在の通信先ポート（既定4660）で、保存するポートの変更指定ではありません。
+`--current`では変更先IPと指定したUDPポートで検証します。EEPROM変更の場合は現在の
+通信先を維持します。その他の設定とライセンスを保持し、出力書式も維持します。
+これらのポート指定は単独IPライターのオプションです。
 
 ### 通常SiTCPのMPC書き込み
 
@@ -129,7 +141,7 @@ IPは現在のランタイムIPです。別のIPを保存する場合は`--set-e
 
 ### EEPROM消去後のMPCX書き込み
 
-書き込み前に、変更予定の内容を確認できます。
+書き込み前に、基本MPCXデータの変更予定を確認できます。
 
 ```bash
 ./bin/mpc-mpcx-ip-command mpcx-plan DEVICE_IP FILE.mpcx
@@ -169,9 +181,7 @@ IPは現在のランタイムIPです。別のIPを保存する場合は`--set-e
 
 既定のビルドは`-std=c++11`を使います。対象環境はLinux、macOS、WSLです。
 
-#readerのTCP項目名は正規Utilityに合わせ、`TCP Keep Alive Enabled`とバッファの有無による2つのKeep Alive時間を並べて表示します。十六進値と時間換算は維持しています。
-
-## インストール先と更新
+### インストール先と更新
 
 既定のインストール先はリポジトリ内の`./bin/`で、管理者権限は不要です。`make`だけではインストール済みコピーは更新されません。
 

@@ -27,6 +27,10 @@ class WriterClearTests(unittest.TestCase):
                 self.assertEqual(writes, [(0x80, 0xFFFFFCFF, 1)] +
                                  [(0x80, 0xFFFFFC00 + i, 16) for i in range(0, 128, 16)] +
                                  [(0x80, 0xFFFFFCFF, 1)])
+                times = [when for when, request in zip(device.request_times, device.requests)
+                         if request[0] == 0x80]
+                for earlier, later in zip(times, times[1:]):
+                    self.assertGreaterEqual(later - earlier, 0.45)
                 if not xg:
                     self.assertFalse(any(address < 0xFFFFFF50 and address + length > 0xFFFFFF40
                                          for _, address, length in device.requests))
@@ -40,6 +44,7 @@ class WriterClearTests(unittest.TestCase):
             ['--clear', '--set-eeprom-ip', '192.0.2.1'],
             ['--clear', '--set-current-ip', '192.0.2.1'],
             ['--clear-first'],
+            ['--clear', '--write-chunk-size', '16'],
         ):
             device = Device()
             try:
@@ -62,6 +67,10 @@ class WriterClearTests(unittest.TestCase):
                 self.assertEqual(writes.count((0x80, 0xFFFFFCFF, 1)), 2)
                 self.assertEqual(writes.count((0x80, 0xFFFFFC20, 16)),
                                  0 if fault == 'enable_timeout' else 1)
+                times = [when for when, request in zip(device.request_times, device.requests)
+                         if request[0] == 0x80]
+                for earlier, later in zip(times, times[1:]):
+                    self.assertGreaterEqual(later - earlier, 0.45)
             finally:
                 device.close()
 
