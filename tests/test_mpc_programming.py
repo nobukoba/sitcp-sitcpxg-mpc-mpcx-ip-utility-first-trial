@@ -35,7 +35,7 @@ class MpcProgrammingTests(unittest.TestCase):
                                       (True, True, 0xFFFFFC00, 80)):
             results = []
             sent = []
-            for options in ((), ('--write-chunk-size', '16')):
+            for options in ((), ('--write-chunk-size', 'official'), ('--write-chunk-size', '16')):
                 device = Device(xg=xg)
                 try:
                     if erased:
@@ -44,22 +44,23 @@ class MpcProgrammingTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     data = [(address, payload) for address, payload in device.write_packets
                             if address != 0xFFFFFCFF]
-                    expected_lengths = [size] if not options else [min(16, size-i) for i in range(0,size,16)]
+                    expected_lengths = [size] if options != ('--write-chunk-size', '16') else [min(16, size-i) for i in range(0,size,16)]
                     self.assertEqual([len(payload) for _, payload in data], expected_lengths)
                     self.assertEqual([address for address, _ in data],
-                                     [base] if not options else [base+i for i in range(0,size,16)])
+                                     [base] if options != ('--write-chunk-size', '16') else [base+i for i in range(0,size,16)])
                     sent.append(b''.join(payload for _, payload in data))
                     results.append(region(device, 0xFFFFFC00, 128))
                     self.assertEqual(device.memory[0xFFFFFCFF], 255)
                 finally:
                     device.close()
-            self.assertEqual(results[0], results[1])
-            self.assertEqual(sent[0], sent[1])
+            self.assertTrue(all(image == results[0] for image in results))
+            self.assertTrue(all(data == sent[0] for data in sent))
 
     def test_invalid_chunk_options_abort_before_device_access(self):
         for options in (('--write-chunk-size','0'), ('--write-chunk-size','256'),
                         ('--write-chunk-size','-1'), ('--write-chunk-size','16x'),
-                        ('--write-chunk-size',), ('--clear','--write-chunk-size','16')):
+                        ('--write-chunk-size',), ('--clear','--write-chunk-size','16'),
+                        ('--clear','--write-chunk-size','official'), ('--clear','--no-fallback')):
             device = Device(xg=False)
             try:
                 result = write_mpc(device, *options)
@@ -179,10 +180,37 @@ class MpcProgrammingTests(unittest.TestCase):
             device = Device(xg=False, fault=fault)
             try:
                 device.put(0xFFFFFC00, bytes([255] * 128))
-                result = write_mpc(device)
+                result = write_mpc(device, '--no-fallback')
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn('No EEPROM writes performed', result.stderr)
                 self.assertFalse(any(command == 0x80 for command, _, _ in device.requests))
+            finally:
+                device.close()
+
+    def test_normal_unreadable_ram_uses_complete_official_defaults(self):
+        reference = json.loads(
+            (ROOT / 'tests/reference/official_mpc_fallback.json').read_text())
+        expected = bytes.fromhex(
+            'c0a80a100018001705b4123403e8ea6013882bf201f401f43000'
+            '0000000000000000000000000000')
+        self.assertEqual(len(expected), 40)
+        for fault in ('mpc_ram_bus', 'mpc_ram_timeout', 'mpc_ram_short'):
+            device = Device(xg=False, fault=fault)
+            try:
+                device.put(0xFFFFFC00, bytes([255] * 128))
+                result = write_mpc(device)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(region(device, 0xFFFFFC18, 40), expected)
+                self.assertEqual(device.memory[0xFFFFFC11], 0)
+                self.assertEqual(region(device, 0xFFFFFC12, 6), PAYLOAD[:6])
+                self.assertEqual(region(device, 0xFFFFFC40, 16), PAYLOAD[6:])
+                self.assertEqual(device.memory[0xFFFFFCFF], 255)
+                self.assertEqual(region(device, 0xFFFFFC00, 128),
+                                 bytes.fromhex(reference['eeprom_after']))
+                self.assertEqual(
+                    [data.hex() for address, data in device.write_packets
+                     if address == 0xFFFFFC10],
+                    [reference['data_write_payload']])
             finally:
                 device.close()
 

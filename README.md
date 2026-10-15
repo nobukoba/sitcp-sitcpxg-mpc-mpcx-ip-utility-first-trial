@@ -84,6 +84,8 @@ For diagnostics and low-level operations, see the [developer command reference](
 
 ```text
 mpc-mpcx-ip-writer CURRENT_IP MPC_OR_MPCX_FILE [options]
+mpc-mpcx-ip-writer CURRENT_IP --clear [--port N] [--timeout SEC]
+mpc-mpcx-ip-writer CURRENT_IP [MPC_OR_MPCX_FILE] --check [--port N] [--timeout SEC]
 ```
 
 Write MPC/MPCX information and also set the current/runtime IP:
@@ -105,18 +107,64 @@ Default RBCP UDP port is `4660`; default timeout is `3` seconds. These defaults 
 
 Common writer options (see `--help` for all options):
 
-```text
---clear              Clear EEPROM only; no file/IP changes (default: off)
---set-eeprom-ip IP   Set EEPROM/default IP address
---set-current-ip IP  Set current/runtime IP address
---port N             RBCP UDP port (default: 4660)
---timeout SEC        RBCP timeout in seconds (default: 3)
--h, --help           Show help
+| Option | Behavior |
+| --- | --- |
+| `--clear` | Clear EEPROM only; no file/IP changes (default: off) |
+| `--check` | Read-only device/status check; optional file type match (default: off) |
+| `--initialize-eeprom` | Force XG initialization; normal MPC unchanged (default: off) |
+| `--set-eeprom-ip IP` | Set EEPROM/default IP address |
+| `--set-current-ip IP` | Set current/runtime IP address |
+| `--no-fallback` | Stop on unreadable normal-MPC initialization RAM (default: off) |
+| `--port N` | RBCP UDP port (default: 4660) |
+| `--timeout SEC` | RBCP timeout in seconds (default: 3) |
+| `-h, --help` | Show help |
+
+When both IP options are given, EEPROM IP is set first and current IP last. The writer reconnects to the new IP and verifies the result.
+
+Programming and Clear display runtime and EEPROM MAC/IP before and after the operation. Success is printed only after all requested operations and verification complete. Check has its own read-only report below. Use the reader for full register dumps.
+
+### Check and Initialize EEPROM: official GUI correspondence
+
+`--check` corresponds to the official Writer's **Check** button: it reads device
+generation and the EEPROM status flag. With a file it also classifies the file
+and checks that its MPC/MPCX generation matches the device. No write is sent.
+A file is optional in both the CLI and the tested official GUI.
+Successful output follows the GUI's wording and line order: `MPC(X) File`,
+`Interface`, `Device`, then EEPROM initialization state. Without a file, it prints
+`MPC(X) File : Not Selected.` and omits Interface and the match suffix.
+This is not a license-content verification or a comparison of the complete
+EEPROM. The reported flag is not the normal-MPC writer's automatic initialization
+decision; see the technical guide for that distinction.
+
+```bash
+./bin/mpc-mpcx-ip-writer DEVICE_IP --check
+./bin/mpc-mpcx-ip-writer DEVICE_IP FILE.mpcx --check
 ```
 
-When both options are given, EEPROM IP is set first and current IP last. The writer reconnects to the new IP and verifies the result.
+Check exits 0 on successful reads and, when a file is supplied, a type match;
+7 means file/device generation mismatch; 1 means a read/file/option error.
+Do not combine it with Clear, initialization, IP changes or programming options.
 
-The writer displays runtime and EEPROM MAC/IP before and after the operation. Success is printed only after all requested operations and verification complete. Use the reader for full register dumps.
+`--initialize-eeprom` corresponds to checking **Initialize EEPROM** and then
+clicking **Write MPC(X)** in the official GUI. A file is required. On XG it
+replaces saved settings with current RAM settings and overlays the selected
+MPCX license/MAC, even when EEPROM is already initialized. This can replace a
+previously saved IP with the current IP. It is not Clear and does not erase the
+entire EEPROM to FF or immediately change active RAM settings. An unreadable
+required XG RAM image stops the operation; there is no fixed XG fallback.
+
+```bash
+./bin/mpc-mpcx-ip-writer DEVICE_IP FILE.mpcx --initialize-eeprom
+```
+
+In the tested official version, the checked box did not force initialization
+of an already initialized normal-SiTCP MPC record. The CLI preserves that
+behavior: this flag has no additional effect on normal MPC; its automatic
+initialization/fallback policy still applies. Neither new option is valid with
+`--clear`. Initialization can use the existing IP override options after file
+programming. There is no additional CLI confirmation dialog.
+See [the detailed option reference](FOR_DEVELOPERS.md#check-and-forced-initialization-options)
+for register evidence, failure behavior and validation scope.
 
 ### TCP/UDP port options
 
@@ -137,11 +185,12 @@ port options belong to the standalone writer. Output formatting is unchanged.
 
 Normal SiTCP programming restores the current network settings when the EEPROM
 IP indicates an uninitialized record. Otherwise it retains the EEPROM settings.
-Initialization saves the current runtime IP; use `--set-eeprom-ip` to save a
-different IP. If the required runtime settings cannot be read completely, the
-writer stops before writing instead of substituting a fixed default IP.
-See the [developer guide](FOR_DEVELOPERS.md#normal-mpc-official-writer-comparison-2026-10-13)
-for the reference capture and compatibility limits.
+Initialization saves the current runtime IP when its settings can be read.
+Otherwise the default uses the official fixed settings, including saved IP
+`192.168.10.16`; `--no-fallback` stops before writing instead.
+Use `--set-eeprom-ip` to save a different IP after successful MPC programming.
+See the [detailed option reference](FOR_DEVELOPERS.md#additional-options-reference)
+and [native comparison](FOR_DEVELOPERS.md#normal-mpc-fallback-native-execution-recheck-2026-10-15).
 
 ### MPCX writing after clearing EEPROM
 

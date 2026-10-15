@@ -84,6 +84,8 @@ class Device:
                 status |= 1
             if self.fault == 'identifier_timeout' and address == 0xFFFFFF08:
                 continue
+            if self.fault == 'check_control_bus' and address == 0xFFFFFC10 and length == 1:
+                status |= 1
             if command == 0x80 and address <= 0xFFFFFC20 < address + length:
                 if self.fault == 'write_bus':
                     status |= 1

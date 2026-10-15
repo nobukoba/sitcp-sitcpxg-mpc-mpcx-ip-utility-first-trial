@@ -24,7 +24,7 @@ constexpr uint32_t XG_IDENTIFIER = 0xFFFFFF08u;
 constexpr size_t EEPROM_READ_SIZE = 0x50;
 constexpr size_t MPC_FILE_SIZE = 22;
 constexpr int FIELD_WIDTH = 20;
-constexpr int NORMAL_MPC_WRITE_SETTLE_MS = 500;
+constexpr int EEPROM_WRITE_SETTLE_MS = 500;
 constexpr size_t DEFAULT_WRITE_CHUNK_SIZE = 0;  // Entire prepared image.
 
 namespace rbcp = sitcp_sitcpxg::rbcp;
@@ -34,6 +34,9 @@ using RbcpTimeout = rbcp::Timeout;
 using RbcpBusError = rbcp::BusError;
 
 size_t parse_write_chunk_size(const std::string& value) {
+    if (value == "official") {
+        return DEFAULT_WRITE_CHUNK_SIZE;
+    }
     if (value.empty() ||
         value.find_first_not_of("0123456789") != std::string::npos) {
         throw std::runtime_error("write chunk size must be an integer from 1 to 255 bytes");
@@ -59,6 +62,13 @@ std::vector<uint8_t> read_exact(
     return data;
 }
 
+void settle_eeprom_write() {
+    // Wait after the ACK as well: this conservatively guarantees at least
+    // 500 ms between writes, even when the previous transaction was slow.
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(EEPROM_WRITE_SETTLE_MS));
+}
+
 void write_exact(
     RbcpClient& client, uint32_t address,
     const std::vector<uint8_t>& data, size_t chunk_size) {
@@ -70,6 +80,7 @@ void write_exact(
             data.begin() + offset + block_size);
         const std::vector<uint8_t> ack = client.write(
             address + static_cast<uint32_t>(offset), block);
+        settle_eeprom_write();
         if (ack.size() != block_size) {
             throw RbcpError(
                 "short RBCP ACK while writing EEPROM");
@@ -161,33 +172,26 @@ std::vector<uint8_t> read_file(const std::string& path) {
 void set_write_enable(RbcpClient& c, bool enabled) {
     const auto ack = c.write(EEPROM_WRITE_ENABLE,
                              {static_cast<uint8_t>(enabled ? 0x00 : 0xFF)});
+    settle_eeprom_write();
     if (ack.size() != 1) {
         throw RbcpError("unexpected RBCP ACK length for EEPROM write-enable");
     }
 }
 
-void settle_normal_mpc_write(int type) {
-    if (type == 2) {
-        // The official normal-MPC capture spaces RBCP operations by ~500 ms.
-        // Retain this interval between enable, the bulk write, and protection.
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(NORMAL_MPC_WRITE_SETTLE_MS));
-    }
-}
-
 std::vector<uint8_t> program(
     RbcpClient& client, const std::vector<uint8_t>& payload, int type,
-    const std::vector<uint8_t>& eeprom, size_t requested_chunk_size) {
+    const std::vector<uint8_t>& eeprom, size_t requested_chunk_size,
+    bool allow_fallback, bool force_initialization) {
     std::vector<uint8_t> image;
     bool initialized = false;
     std::vector<std::pair<uint32_t, std::vector<uint8_t>>> extensions;
     uint32_t programming_base = EEPROM_BASE;
     if (type == 1) {
         image = sitcp_sitcpxg::eeprom_init::prepare_mpcx_image(
-            client, eeprom, payload, initialized);
+            client, eeprom, payload, initialized, force_initialization);
     } else {
         image = sitcp_sitcpxg::eeprom_init::prepare_mpc_image(
-            client, eeprom, payload);
+            client, eeprom, payload, allow_fallback);
         programming_base = EEPROM_BASE + 0x10;
     }
     const size_t write_chunk_size =
@@ -196,7 +200,6 @@ std::vector<uint8_t> program(
 
     try {
         set_write_enable(client, true);
-        settle_normal_mpc_write(type);
         write_exact(client, programming_base, image, write_chunk_size);
         if (type == 1 && initialized) {
             for (uint32_t offset = 0x50; offset < 0x80; offset += 16) {
@@ -214,11 +217,10 @@ std::vector<uint8_t> program(
                 extensions.push_back(std::make_pair(address, block));
             }
         }
-        settle_normal_mpc_write(type);
     } catch (...) {
         // An unacknowledged data write may have been accepted. Allow settling,
         // then attempt protection without repeating the data write.
-        settle_normal_mpc_write(type);
+        settle_eeprom_write();
         try {
             set_write_enable(client, false);
         } catch (...) {
@@ -226,7 +228,6 @@ std::vector<uint8_t> program(
         throw;
     }
     set_write_enable(client, false);
-    settle_normal_mpc_write(type);
 
     const auto actual = read_exact(client, programming_base, image.size());
     for (const auto& extension : extensions) {
@@ -257,7 +258,9 @@ void usage(const char* argv0) {
               << "Options:\n"
               << "  --port N       RBCP UDP port (default: " << DEFAULT_PORT << ")\n"
               << "  --timeout SEC  RBCP timeout in seconds (default: " << DEFAULT_TIMEOUT << ")\n"
-              << "  --write-chunk-size N  EEPROM data bytes per write, 1..255\n"
+              << "  --no-fallback        Stop if normal-MPC initialization RAM is unreadable (default: off)\n"
+              << "  --initialize-eeprom  Force XG initialization; normal MPC unchanged (default: off)\n"
+              << "  --write-chunk-size N  1..255 bytes, or official (default: official)\n"
               << "                        (default: entire image; use 16 to split)\n"
               << "  -h, --help     Show this help\n";
 }
@@ -279,6 +282,8 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
         uint16_t port = DEFAULT_PORT;
         double timeout = DEFAULT_TIMEOUT;
         size_t write_chunk_size = DEFAULT_WRITE_CHUNK_SIZE;
+        bool allow_fallback = true;
+        bool force_initialization = false;
 
         for (int i = 3; i < argc; ++i) {
             const std::string a = argv[i];
@@ -293,6 +298,10 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
                 if (timeout <= 0) {
                     throw std::runtime_error("timeout must be positive");
                 }
+            } else if (a == "--no-fallback") {
+                allow_fallback = false;
+            } else if (a == "--initialize-eeprom") {
+                force_initialization = true;
             } else if (a == "--write-chunk-size" && i + 1 < argc) {
                 write_chunk_size = parse_write_chunk_size(argv[++i]);
             } else if (a == "-h" || a == "--help") {
@@ -329,7 +338,8 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
         const size_t read_size = file_type == 1 ? EEPROM_READ_SIZE : 64;
         const std::vector<uint8_t> eeprom =
             read_exact(client, read_base, read_size);
-        program(client, payload, file_type, eeprom, write_chunk_size);
+        program(client, payload, file_type, eeprom, write_chunk_size,
+                allow_fallback, force_initialization);
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "ERROR: " << e.what() << "\n";
@@ -340,25 +350,77 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
 
 namespace {
 
+int check_device(const std::string& host, const std::string& file,
+                 uint16_t port, double timeout) {
+    int file_type = 0;
+    std::string file_label;
+    if (!file.empty()) {
+        const std::vector<uint8_t> payload = read_file(file);
+        file_type = classify_payload(payload);
+        if (payload.size() != MPC_FILE_SIZE ||
+            (file_type != 1 && file_type != 2)) {
+            throw RbcpError("invalid/unknown 22-byte MPC/MPCX payload");
+        }
+        const std::vector<uint8_t> tag = decode_nonzero(
+            payload, file_type == 1 ? 0 : 6, 7, file_type == 1 ? 0x2C : 0x34);
+        for (size_t i = 0; i < tag.size() && tag[i] != 0; ++i) {
+            file_label.push_back(static_cast<char>(tag[i]));
+        }
+        while (!file_label.empty() && file_label.back() == ' ') {
+            file_label.pop_back();
+        }
+    }
+
+    RbcpClient client(host, port, timeout);
+    std::string detection;
+    const int target_type = detect_target(client, detection);
+    if (target_type != 1 && target_type != 2) {
+        throw RbcpError("Check failed: " + detection);
+    }
+    const std::vector<uint8_t> control =
+        rbcp::read_retry(client, EEPROM_BASE + 0x10, 1);
+    std::cout << "MPC(X) File : "
+              << (file.empty() ? "Not Selected." : file_label) << '\n';
+    if (!file.empty()) {
+        std::cout << "  Interface : "
+                  << (file_type == 1 ? "10GbE" : "100/1000MbE") << '\n';
+    }
+    std::cout << "Device " << host << " : "
+              << (target_type == 1 ? "SiTCP XG" : "SiTCP 100/1000M");
+    if (!file.empty()) {
+        std::cout << (file_type == target_type ? " - Matched" : " - Mismatch");
+    }
+    // Preserve the native GUI's wording, including its uninitialized-state typo.
+    std::cout << '\n' << ((control[0] & 0x80u) != 0
+              ? "EEOROM needs to be inbitialized."
+              : "EEPROM was already initialized") << '\n';
+    return !file.empty() && file_type != target_type ? 7 : 0;
+}
+
 void unified_usage(const char* program) {
     std::cerr
         << "Usage: " << program << " CURRENT_IP MPC_OR_MPCX_FILE [options]\n"
-        << "       " << program << " CURRENT_IP --clear [--port N] [--timeout SEC]\n\n"
+        << "       " << program << " CURRENT_IP --clear [--port N] [--timeout SEC]\n"
+        << "       " << program << " CURRENT_IP [FILE] --check [--port N] [--timeout SEC]\n\n"
         << "Programs an MPC/MPCX file and optionally changes the SiTCP IP address.\n"
         << "For uninitialized MPCX EEPROM (FC10 bit7 set), restores settings\n"
         << "from complete runtime FF00..FF4F before overlaying the MPCX file.\n"
         << "If runtime cannot be read, stops before writing; no guessed defaults.\n\n"
         << "Normal MPC writes FC10..FC4F, sets control to 0x01 and restores\n"
         << "runtime FF18..FF3F if the first/last EEPROM IP octets are FF.\n"
-        << "Unreadable runtime stops before writing; no automatic default IP.\n\n"
+        << "Unreadable normal-MPC runtime uses official defaults (IP 192.168.10.16).\n\n"
         << "Options:\n"
+        << "  --check              Read-only target/EEPROM flag check; optional file type match (default: off)\n"
+        << "  --initialize-eeprom  Force XG RAM-to-EEPROM initialization (default: off)\n"
+        << "                       Requires a file; normal MPC keeps its automatic rule, as native GUI\n"
         << "  --clear              Clear only: erase EEPROM FC00..FC7F (default: off)\n"
         << "                       Deletes license/settings; no file or IP changes allowed\n"
         << "  --set-eeprom-ip IP   Set EEPROM/default IP address\n"
         << "  --set-current-ip IP  Set current/runtime IP address\n"
-        << "  --write-chunk-size N EEPROM data bytes per write, 1..255\n"
+        << "  --no-fallback       Stop on unreadable normal-MPC initialization RAM (default: off)\n"
+        << "  --write-chunk-size N 1..255 bytes, or official (default: official)\n"
         << "                       (default: entire image; MPC 64, MPCX 24 or 80 bytes)\n"
-        << "                       Use 16 for 16-byte writes; not valid with --clear\n"
+        << "                       Use official for native lengths, 16 to split; not valid with --clear\n"
         << "  --port N             RBCP UDP port (default: "
         << sitcp_sitcpxg::network_config::DEFAULT_PORT << ")\n"
         << "  --timeout SEC        RBCP timeout in seconds (default: "
@@ -386,6 +448,8 @@ int main(int argc, char** argv) {
         const bool has_file = std::string(argv[2]).find("--") != 0;
         const std::string file = has_file ? argv[2] : "";
         bool clear_only = false;
+        bool check_only = false;
+        bool has_chunk_option = false;
 
         bool has_eeprom_ip = false;
         bool has_current_ip = false;
@@ -394,12 +458,18 @@ int main(int argc, char** argv) {
         uint16_t port = sitcp_sitcpxg::network_config::DEFAULT_PORT;
         double timeout = sitcp_sitcpxg::network_config::DEFAULT_TIMEOUT;
         size_t write_chunk_size = DEFAULT_WRITE_CHUNK_SIZE;
+        bool allow_fallback = true;
+        bool force_initialization = false;
 
         for (int i = has_file ? 3 : 2; i < argc; ++i) {
             const std::string option = argv[i];
 
             if (option == "--clear") {
                 clear_only = true;
+            } else if (option == "--check") {
+                check_only = true;
+            } else if (option == "--initialize-eeprom") {
+                force_initialization = true;
             } else if (option == "--set-eeprom-ip" && i + 1 < argc) {
                 eeprom_ip = argv[++i];
                 has_eeprom_ip = true;
@@ -419,8 +489,11 @@ int main(int argc, char** argv) {
                 if (timeout <= 0) {
                     throw std::runtime_error("timeout must be positive");
                 }
+            } else if (option == "--no-fallback") {
+                allow_fallback = false;
             } else if (option == "--write-chunk-size" && i + 1 < argc) {
                 write_chunk_size = parse_write_chunk_size(argv[++i]);
+                has_chunk_option = true;
             } else if (option == "-h" || option == "--help") {
                 unified_usage(argv[0]);
                 return 0;
@@ -429,12 +502,21 @@ int main(int argc, char** argv) {
             }
         }
 
-        if (clear_only && (has_file || has_eeprom_ip || has_current_ip || write_chunk_size != 0)) {
+        if (clear_only && (has_file || has_eeprom_ip || has_current_ip ||
+                           has_chunk_option || !allow_fallback ||
+                           force_initialization || check_only)) {
             throw std::runtime_error(
-                "--clear is clear-only; do not specify a file, IP changes or write chunk size");
+                "--clear is clear-only; do not specify a file, IP changes or programming options");
         }
-        if (!clear_only && !has_file) {
-            throw std::runtime_error("an MPC/MPCX file or --clear is required");
+        if (check_only && (has_eeprom_ip || has_current_ip || has_chunk_option ||
+                           !allow_fallback || force_initialization)) {
+            throw std::runtime_error("--check is read-only; no programming options allowed");
+        }
+        if (!clear_only && !check_only && !has_file) {
+            throw std::runtime_error("an MPC/MPCX file, --clear or --check is required");
+        }
+        if (check_only) {
+            return check_device(host, file, port, timeout);
         }
 
         sitcp_sitcpxg::network_config::show_compact(host, port, timeout, "before");
@@ -458,6 +540,13 @@ int main(int argc, char** argv) {
         if (write_chunk_size != DEFAULT_WRITE_CHUNK_SIZE) {
             writer_args.push_back("--write-chunk-size");
             writer_args.push_back(std::to_string(write_chunk_size));
+        }
+
+        if (!allow_fallback) {
+            writer_args.push_back("--no-fallback");
+        }
+        if (force_initialization) {
+            writer_args.push_back("--initialize-eeprom");
         }
 
         std::vector<char*> writer_argv;

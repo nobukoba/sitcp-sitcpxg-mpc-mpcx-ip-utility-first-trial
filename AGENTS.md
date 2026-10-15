@@ -18,6 +18,25 @@ Keep command names, option defaults, and output formatting consistent. All `--he
 
 ## Writer CLI
 
+- --check is a separate read-only mode with optional file; validate a supplied
+  payload locally, read FF08/4 and FC10/1 only, report generation/status flag and
+  optional file generation match. Never enable/protect/write during Check.
+  Exit 7 on a file/device type mismatch; never call that license verification.
+  FC10 bit7 is a status flag on normal SiTCP, not its automatic IP endpoint rule.
+- Check successful reports use native GUI wording and line order: decoded
+  MPC(X) File tag, indented Interface, Device with Matched/Mismatch, EEPROM state.
+  Interface is file generation when a file is supplied. Without a file print
+  MPC(X) File : Not Selected. and omit Interface and the match suffix.
+  Preserve native spelling in the uninitialized message. Keep failure diagnostics
+  and exit codes meaningful; fileless Check still succeeds on successful reads.
+- --initialize-eeprom requires file programming and forces XG preparation from
+  complete safe RAM even when FC10 bit7 is clear. Normal MPC keeps its existing
+  automatic rule; native checked-box capture on initialized normal MPC did not
+  force a RAM copy. Preserve that explicit generation limitation in help/docs.
+- Reject --check with Clear or programming/IP options, and --clear with either
+  new option, before access. Force mode must retain default/numeric transfer
+  sizing, optional XG extension handling, cleanup, no retries and verification.
+
 The high-level programming mode requires an MPC/MPCX file:
 
 ```text
@@ -50,7 +69,9 @@ MPC/MPCX payload handling and SiTCP IP-register handling may be exposed through 
 - IP/MAC register reads must not modify or reinterpret MPC/MPCX license payloads.
 - The MPC/MPCX reader must always display current MAC, current IP, EEPROM MAC, and EEPROM IP.
 - Keep common MPC/MPCX reader fields in the same order for normal SiTCP and SiTCP-XG. In particular, the `MAC` line must occupy the same output position; generation-specific FC00/FC40 detail lines must not move common fields around.
-- The MPC/MPCX writer must display those four values before and after the operation whenever the target remains reachable.
+- MPC/MPCX programming and Clear must display those four values before and after
+  the operation whenever the target remains reachable. Check uses its separate
+  native-style read-only report and does not take network snapshots.
 - The standalone IP reader/writer must remain available and must not require an MPC/MPCX file.
 
 ## Advanced command
@@ -120,6 +141,9 @@ never remove the source directory or installed binaries.
   including enable, each 16-byte block and protection restoration on success or
   failure. Use a monotonic clock; ACK time counts toward the interval. Retain
   mandatory read-back and do not retry erase writes.
+  This is the timing requirement, not a verified wire guarantee: the 2026-10-15
+  Cygwin capture contains gaps below 500 ms. Preserve that unresolved qualification
+  until measured wire timing is explained or corrected.
 
 `mpc-mpcx-ip-command rbcp-write` and `clear` are intentionally low-level/destructive. Keep explicit command names and the `--yes-really-clear` guard for the advanced clear command.
 Writer `--clear` is an explicit standalone clear-only request and needs no
@@ -197,17 +221,23 @@ Preserve all unique information when reorganizing documentation: move technical 
 
 - Use `src/sitcp-sitcpxg-eeprom-init.hpp` for both writer image preparation and
   read-only `mpcx-plan`. Validate the file and exact XG identifier before use.
-- EEPROM FC10 bit7 selects initialization, including FF after clear; do not use
+- EEPROM FC10 bit7 selects automatic initialization, including FF after clear;
+  explicit --initialize-eeprom also selects it. Do not use
   license classification, rate validity, or an all-FF-image test instead.
 - If initialization is needed, require a complete runtime FF00..FF4F image,
   verify its XG identifier and reject a set runtime RESET bit. Overlay MPCX
   bytes at FC00..FC0F and FC12..FC17; retain RAM at FC10..FC11 and FC18..FC4F.
   Write/read-back verify the resulting 80 bytes, including FC40..FC4F.
-- If FC10 bit7 is clear, keep the 24-byte MPCX programming path and preserve
-  EEPROM configuration. Do not replace an existing rate because it looks odd.
+- If FC10 bit7 is clear and --initialize-eeprom is absent, keep the 24-byte MPCX
+  programming path and preserve EEPROM configuration. Do not replace an existing
+  rate because it looks odd.
 - Never program diagnostic placeholder bytes or mix partial RAM with invented
   defaults. No verified MPCX default image exists in our evidence. The official
   normal-SiTCP fallback table must not be reused for SiTCP-XG.
+- Official Writer 0.4.1-2-gc782 XG preflight was checked with bus-error and
+  short FF00/80 replies: zero writes; static length-mismatch path returns failure
+  without a fixed table. Do not use one board's runtime/EEPROM settings as proof
+  of an official XG fallback. See the 2026-10-15 developer investigation.
 - During XG initialization only, attempt 16-byte runtime reads at FF50, FF60, FF70 after the base image write. Copy each complete readable block to the corresponding EEPROM block; skip failed reads without changing that block. Extension writes are never optional failures: restore protection and fail, without retry. Verify every copied block. Keep success output unchanged; do not claim timing equivalence.
 - Always prepare the complete mandatory base image before enabling writes.
   Optional extension source reads occur later, after the base data write. Attempt protection
@@ -221,18 +251,21 @@ Preserve all unique information when reorganizing documentation: move technical 
 
 - Normal MPC must use a separate FC10..FC4F (64-byte) record, after independent
   generation detection. Do not read or program FC00..FC0F for this writer path.
-- Match the captured legacy writer: control FC10 is always 01, FC11 is retained,
+- Match the captured legacy writer: control FC10 is always 01, FC11 is retained
+  except that the fixed-default fallback initializes it to 00,
   payload MAC maps to FC12..FC17 and the remaining 16 bytes to FC40..FC4F.
 - Normal initialization is selected when both EEPROM IP endpoint octets
   FC18 and FC1B are FF. This is not the MPCX FC10-bit7 condition.
-- On initialization, require complete runtime FF18..FF3F and copy those 40 bytes
-  to FC18..FC3F before overlaying the license. Abort before writes on RAM failure;
-  do not silently apply the official GUI's fixed default-address fallback.
+- On normal-MPC initialization, try complete runtime FF18..FF3F first. On read
+  failure use the exact official 40-byte fallback table by default, as requested
+  by the user. --no-fallback must abort before writes instead. Never apply this
+  normal-SiTCP table to XG, generation detection, snapshots or IP-only writes.
 - By default issue the captured single 64-byte normal-MPC data write at FC10; an explicit chunk size may split it. Retain
   protection cleanup, no destructive retries, and full read-back verification.
-- Retain approximately 500 ms settling between normal-MPC enable/data/protect
-  writes, including before cleanup after an ambiguous data ACK. Do not apply
-  this new pacing to the existing MPCX programming path.
+- MPC/MPCX programming both wait 500 ms after each successful enable/data/protect
+  ACK, including numeric chunks and copied optional extensions. After an ambiguous
+  enable/data failure wait 500 ms before attempting protection; never retry data.
+  This user-requested pacing supersedes the earlier ACK-paced XG behavior.
 - Preserve MPCX image preparation. Default programming is one complete image write; explicit `--write-chunk-size 16` selects the previous 16-byte chunking.
 - The checked-in official reference contains synthetic data only. Never replace
   it with a proprietary license or commit the official executable/disassembly.
@@ -256,7 +289,11 @@ Preserve all unique information when reorganizing documentation: move technical 
 - Default `--write-chunk-size` is automatic whole-image programming: normal
   MPC 64 bytes at FC10, initialized MPCX 24 bytes at FC00, initialization MPCX
   80 bytes at FC00. Do not expand the preservation image or change its bytes.
-- Explicit N must be a complete positive decimal integer in 1..255 bytes.
+- Accept the explicit value official for the default whole-image lengths.
+  Otherwise N must be a complete positive decimal integer in 1..255 bytes.
+  Reject any explicit sizing option, including official, and --no-fallback with
+  --clear before access. Document current defaults, examples and restrictions in
+  the developer option reference; README keeps sizing details out.
   `--write-chunk-size 16` selects 16-byte writes with a shorter final block.
 - Reject invalid sizes, missing values and clear/size combinations before
   any device access. Forward the option through the high-level writer wrapper.

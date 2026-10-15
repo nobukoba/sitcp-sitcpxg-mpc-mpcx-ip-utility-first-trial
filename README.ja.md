@@ -82,6 +82,8 @@ MPC/MPCXファイルは不要です。既定ではEEPROMだけを変更します
 
 ```text
 mpc-mpcx-ip-writer CURRENT_IP MPC_OR_MPCX_FILE [options]
+mpc-mpcx-ip-writer CURRENT_IP --clear [--port N] [--timeout SEC]
+mpc-mpcx-ip-writer CURRENT_IP [MPC_OR_MPCX_FILE] --check [--port N] [--timeout SEC]
 ```
 
 MPC/MPCX情報を書き込み、現在のランタイムIPも設定します。
@@ -106,15 +108,53 @@ RBCPの既定UDPポートは`4660`、タイムアウトは`3`秒です。`--help
 | オプション | 内容 |
 | --- | --- |
 | `--clear` | EEPROM消去のみ。ファイル書き込みやIP変更なし（既定: 無効） |
+| `--check` | 読み取り専用の機器・状態確認。ファイル指定時は種類も照合（既定: 無効） |
+| `--initialize-eeprom` | XGを強制初期化。通常MPCの動作は変更しない（既定: 無効） |
 | `--set-eeprom-ip IP` | EEPROMの既定IPを設定 |
 | `--set-current-ip IP` | 現在のランタイムIPを設定 |
+| `--no-fallback` | 通常MPC初期化のRAM読み取り失敗時に停止（既定: 無効） |
 | `--port N` | RBCP UDPポート（既定: 4660） |
 | `--timeout SEC` | RBCPタイムアウト秒数（既定: 3） |
 | `-h, --help` | ヘルプを表示 |
 
-両方を指定すると、EEPROMのIPを先に設定し、現在のIPを最後に変更します。変更後のIPへ再接続して検証します。
+両方のIPオプションを指定すると、EEPROMのIPを先に設定し、現在のIPを最後に変更します。変更後のIPへ再接続して検証します。
 
-writerは変更前後のランタイム/EEPROMのMAC・IPを表示し、すべての操作と検証が完了すると成功を表示します。全レジスタのダンプはreaderで確認してください。
+ファイル書き込みとClearは変更前後のランタイム/EEPROMのMAC・IPを表示し、すべての操作と検証が完了すると成功を表示します。Checkは後述の読み取り専用表示を使います。全レジスタのダンプはreaderで確認してください。
+
+### CheckとInitialize EEPROM：正規GUIとの対応
+
+`--check`は正規Writerの**Check**ボタンに対応し、機器の世代とEEPROMの状態フラグを読み取ります。
+ファイル指定時はファイルも分類し、MPC/MPCXの世代が機器と一致するか確認します。書き込みは送信しません。
+CLIも検証した正規GUIも、ファイルを省略してCheckを実行できます。
+正常時は正規GUIと同じ文言・行順で、`MPC(X) File`、`Interface`、`Device`、EEPROM初期化状態を表示します。
+ファイルなしでは`MPC(X) File : Not Selected.`を表示し、Interfaceと一致判定は省略します。
+ライセンス内容の検証やEEPROM全体の比較ではありません。表示する状態フラグは、通常MPCの
+自動初期化判定そのものではありません。この違いは技術文書に記載しています。
+
+```bash
+./bin/mpc-mpcx-ip-writer DEVICE_IP --check
+./bin/mpc-mpcx-ip-writer DEVICE_IP FILE.mpcx --check
+```
+
+Checkの終了コードは、読み取り成功かつファイル指定時に種類が一致すれば0、ファイルと機器の世代が
+不一致なら7、読み取り・ファイル・オプションのエラーは1です。
+Clear、初期化、IP変更、書き込み用オプションとは併用できません。
+
+`--initialize-eeprom`は、正規GUIの**Initialize EEPROM**にチェックを入れ、**Write MPC(X)**を
+押す操作に対応します。ファイルが必要です。XGでは初期化済みでも、現在のRAM設定に選択した
+MPCXライセンス・MACを重ねてEEPROMへ保存します。以前の保存IPが現在のIPに置き換わる場合があります。
+ClearのようにEEPROM全体をFFで消去する操作ではなく、現在のRAM設定も直ちには変わりません。
+必須のXG RAMを読めない場合は停止し、固定値にはフォールバックしません。
+
+```bash
+./bin/mpc-mpcx-ip-writer DEVICE_IP FILE.mpcx --initialize-eeprom
+```
+
+検証した正規版では、通常SiTCPの初期化済みMPCに対しては、チェックを入れても強制初期化されませんでした。
+CLIもこれに合わせ、このフラグは通常MPCの動作を変更しません。従来の自動初期化・フォールバックが適用されます。
+新しい2オプションは`--clear`と併用できません。初期化後の保存IP・現在IPには既存のIP変更オプションを
+使用でき、ファイル書き込み後に実行されます。CLIに追加の確認ダイアログはありません。
+レジスタ上の根拠、失敗時の動作、検証範囲は[オプションの詳細](FOR_DEVELOPERS.md#check-and-forced-initialization-options)を参照してください。
 
 ### TCP/UDPポートの指定
 
@@ -134,10 +174,11 @@ writerは変更前後のランタイム/EEPROMのMAC・IPを表示し、すべ�
 
 EEPROMのIPが未初期化レコードを示す場合は、現在のネットワーク設定を復元して
 MPCを書き込みます。それ以外ではEEPROMの設定を維持します。初期化で保存される
-IPは現在のランタイムIPです。別のIPを保存する場合は`--set-eeprom-ip`を指定してください。
-必要なランタイム設定を完全に読み取れない場合は、固定の初期IPで置き換えず、
-書き込み前に停止します。実キャプチャと互換性の範囲は
-[開発者ガイド](FOR_DEVELOPERS.md#normal-mpc-official-writer-comparison-2026-10-13)を参照してください。
+IPは、設定を読み取れた場合は現在のランタイムIPです。読み取れない場合は既定で、
+保存IPが`192.168.10.16`となる正規版の固定設定を使用します。`--no-fallback`を指定すると書き込み前に停止します。
+別のIPを保存する場合は`--set-eeprom-ip`を指定してください。MPC書き込み成功後に自動で変更します。
+[追加オプションの詳細](FOR_DEVELOPERS.md#additional-options-reference)と
+[正規版との比較](FOR_DEVELOPERS.md#normal-mpc-fallback-native-execution-recheck-2026-10-15)を参照してください。
 
 ### EEPROM消去後のMPCX書き込み
 

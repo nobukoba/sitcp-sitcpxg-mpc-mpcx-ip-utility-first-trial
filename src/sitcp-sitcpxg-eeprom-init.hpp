@@ -52,11 +52,13 @@ inline std::vector<uint8_t> read_mpcx_runtime(rbcp::Client& client) {
 // Called only after file validation and independent target generation detection.
 inline std::vector<uint8_t> prepare_mpcx_image(
     rbcp::Client& client, const std::vector<uint8_t>& eeprom,
-    const std::vector<uint8_t>& payload, bool& initialized) {
+    const std::vector<uint8_t>& payload, bool& initialized,
+    bool force_initialization = false) {
     if (payload.size() != 22) {
         throw rbcp::Error("MPCX image requires a 22-byte payload");
     }
-    initialized = mpcx_needs_initialization(eeprom);
+    const bool needs_initialization = mpcx_needs_initialization(eeprom);
+    initialized = force_initialization || needs_initialization;
     std::vector<uint8_t> image;
     if (initialized) {
         // The official RAM image supplies FC10..FC11 and FC18..FC4F,
@@ -75,7 +77,7 @@ inline std::vector<uint8_t> prepare_mpcx_image(
 // Official Writer 0.4.1-2 reads/writes FC10..FC4F, not FC00..FC4F.
 inline std::vector<uint8_t> prepare_mpc_image(
     rbcp::Client& client, const std::vector<uint8_t>& eeprom,
-    const std::vector<uint8_t>& payload) {
+    const std::vector<uint8_t>& payload, bool allow_fallback = true) {
     if (eeprom.size() != 64 || payload.size() != 22) {
         throw rbcp::Error("MPC image requires a 64-byte FC10..FC4F record "
                           "and a 22-byte payload");
@@ -90,18 +92,30 @@ inline std::vector<uint8_t> prepare_mpc_image(
                 rbcp::read_retry(client, 0xFFFFFF18u, 40);
             std::copy(runtime.begin(), runtime.end(), image.begin() + 8);
         } catch (const rbcp::Error& error) {
-            // The official GUI uses fixed defaults on RAM failure. Preserve
-            // the CLI's fail-closed policy: do not silently replace an IP or
-            // port with defaults when current settings cannot be obtained.
-            throw rbcp::Error(
-                std::string("MPC EEPROM initialization requires complete runtime ") +
-                "FF18..FF3F: " + error.what() + ". No EEPROM writes performed; "
-                "automatic normal-SiTCP defaults are not enabled.");
+            if (!allow_fallback) {
+                throw rbcp::Error(
+                    std::string("MPC EEPROM initialization requires complete runtime ") +
+                    "FF18..FF3F: " + error.what() + ". No EEPROM writes performed; "
+                    "normal-SiTCP fallback disabled by --no-fallback.");
+            }
+            // Official normal-SiTCP settings table, VA 0x417BC0.
+            // Replace the complete settings region; never retain a partial read.
+            // The native fallback first zeroes its complete FC10..FC4F record.
+            image.assign(64, 0);
+            const uint8_t defaults[] = {
+                0xC0, 0xA8, 0x0A, 0x10, 0x00, 0x18, 0x00, 0x17,
+                0x05, 0xB4, 0x12, 0x34, 0x03, 0xE8, 0xEA, 0x60,
+                0x13, 0x88, 0x2B, 0xF2, 0x01, 0xF4, 0x01, 0xF4,
+                0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+            };
+            std::copy(defaults, defaults + sizeof(defaults), image.begin() + 8);
         }
     }
 
     // The official legacy writer always programs this exact control value.
-    // FC11 remains from EEPROM; MAC and license data come from the MPC file.
+    // FC11 remains from EEPROM except for the zeroed fallback record.
+    // MAC and license data come from the MPC file.
     image[0] = 0x01;
     std::copy(payload.begin(), payload.begin() + 6, image.begin() + 2);
     std::copy(payload.begin() + 6, payload.end(), image.begin() + 0x30);
