@@ -17,8 +17,8 @@ RBCPを使ってSiTCP / SiTCP-XGを設定する、試験的なC++11ユーティ�
 ## インストール
 
 ```bash
-git clone https://github.com/nobukoba/sitcp-sitcpxg-mpc-mpcx-ip-utility-first-trial.git
-cd sitcp-sitcpxg-mpc-mpcx-ip-utility-first-trial
+git clone https://github.com/spadi-alliance/sitcp-sitcpxg-mpc-mpcx-ip-utility.git
+cd sitcp-sitcpxg-mpc-mpcx-ip-utility
 make
 make install
 ```

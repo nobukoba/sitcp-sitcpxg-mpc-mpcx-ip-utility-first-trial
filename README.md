@@ -17,8 +17,8 @@ The installed command set contains five commands:
 ## Quick installation
 
 ```bash
-git clone https://github.com/nobukoba/sitcp-sitcpxg-mpc-mpcx-ip-utility-first-trial.git
-cd sitcp-sitcpxg-mpc-mpcx-ip-utility-first-trial
+git clone https://github.com/spadi-alliance/sitcp-sitcpxg-mpc-mpcx-ip-utility.git
+cd sitcp-sitcpxg-mpc-mpcx-ip-utility
 make
 make install
 ```
