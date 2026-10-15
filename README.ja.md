@@ -1,8 +1,8 @@
-# SiTCP / SiTCP-XG MPC / MPCX / IP Utility (first trial)
+# SiTCP / SiTCP-XG MPC / MPCX / IP Utility
 
 **Language: [English](README.md) | 日本語**
 
-RBCPを使ってSiTCP / SiTCP-XGを設定する、試験的なC++11ユーティリティです。
+RBCPを使ってSiTCP / SiTCP-XGを設定する、C++11コマンドラインユーティリティです。
 
 ## コマンド
 
