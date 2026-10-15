@@ -91,7 +91,9 @@ private:
         const int getaddrinfo_result = getaddrinfo(
             host_.c_str(), port_string.c_str(), &hints, &result);
         if (getaddrinfo_result != 0) {
-            throw Error("cannot resolve RBCP target " + host_ + ": " + gai_strerror(getaddrinfo_result));
+            throw Error(
+                "cannot resolve RBCP target " + host_ + ": " +
+                gai_strerror(getaddrinfo_result));
         }
 
         const int socket_fd = socket(
@@ -107,14 +109,17 @@ private:
         if (connected < 0) {
             const int connect_errno = errno;
             close(socket_fd);
-            throw Error("cannot reach RBCP target " + host_ + ": " + strerror(connect_errno));
+            throw Error(
+                "cannot reach RBCP target " + host_ + ": " +
+                strerror(connect_errno));
         }
         const ssize_t sent = send(socket_fd, packet.data(), packet.size(), 0);
 
         if (sent != static_cast<ssize_t>(packet.size())) {
             const int send_errno = errno;
             close(socket_fd);
-            throw Error("RBCP send failed to " + host_ + ": " + strerror(send_errno));
+            throw Error(
+                "RBCP send failed to " + host_ + ": " + strerror(send_errno));
         }
 
         fd_set read_fds;
@@ -150,7 +155,9 @@ private:
         close(socket_fd);
 
         if (received < 0) {
-            throw Error("RBCP receive failed from " + host_ + ": " + strerror(receive_errno));
+            throw Error(
+                "RBCP receive failed from " + host_ + ": " +
+                strerror(receive_errno));
         }
         if (received < 8 || reply[0] != 0xFF || reply[2] != id) {
             throw Error("invalid RBCP reply");

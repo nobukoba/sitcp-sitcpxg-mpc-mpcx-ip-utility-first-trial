@@ -190,7 +190,7 @@ Otherwise the default uses the official fixed settings, including saved IP
 `192.168.10.16`; `--no-fallback` stops before writing instead.
 Use `--set-eeprom-ip` to save a different IP after successful MPC programming.
 See the [detailed option reference](FOR_DEVELOPERS.md#additional-options-reference)
-and [native comparison](FOR_DEVELOPERS.md#normal-mpc-fallback-native-execution-recheck-2026-10-15).
+and [native comparison](docs/verification/2026-10-15-fallback.md#normal-mpc-fallback-native-execution-recheck-2026-10-15).
 
 ### MPCX writing after clearing EEPROM
 
@@ -269,4 +269,5 @@ chosen `PREFIX/bin/`. For a system installation, use
 ### Documentation
 
 - [For developers](FOR_DEVELOPERS.md) — architecture, build/development notes, technical evidence, MPC/MPCX EEPROM mappings, device-generation detection, references, and testing.
+- [Verification records](docs/verification/README.md) — dated test conditions, results, restoration and limits; raw captures and backups remain private.
 - [Agent instructions](AGENTS.md) — constraints for automated development.

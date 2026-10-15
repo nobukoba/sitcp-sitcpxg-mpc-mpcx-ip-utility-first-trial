@@ -93,8 +93,9 @@ inline std::vector<uint8_t> reconstruct_mpc_payload(
 }
 
 inline std::string hex_bytes(const std::vector<uint8_t>& data,
-                      size_t begin = 0, size_t end = static_cast<size_t>(-1),
-                      char separator = ' ') {
+                             size_t begin = 0,
+                             size_t end = static_cast<size_t>(-1),
+                             char separator = ' ') {
     end = std::min(end, data.size());
 
     std::ostringstream output;
@@ -159,9 +160,10 @@ inline void setting_field(const std::string& name, const std::string& value) {
 
 inline void control_flag(const RegisterImage& image, const std::string& name,
                          uint8_t mask) {
-    setting_field(name, image.has(0x10, 1)
-          ? ((image.bytes[0x10] & mask) ? "Enabled" : "Disabled")
-          : "unavailable (RBCP bus error)");
+    setting_field(
+        name, image.has(0x10, 1)
+                  ? ((image.bytes[0x10] & mask) ? "Enabled" : "Disabled")
+                  : "unavailable (RBCP bus error)");
 }
 
 inline void show_parameters(const RegisterImage& image, bool xg) {
@@ -173,8 +175,10 @@ inline void show_parameters(const RegisterImage& image, bool xg) {
     std::cout << "\nTCP settings:\n";
     setting_field("TCP Max Segment Size", numeric_value(image, 0x20, " bytes"));
     control_flag(image, "TCP Keep Alive Enabled", 0x04);
-    setting_field("TCP Keep Alive(buffer not empty)", numeric_value(image, 0x24, " ms"));
-    setting_field("TCP Keep Alive(buffer empty)", numeric_value(image, 0x26, " ms"));
+    setting_field(
+        "TCP Keep Alive(buffer not empty)", numeric_value(image, 0x24, " ms"));
+    setting_field(
+        "TCP Keep Alive(buffer empty)", numeric_value(image, 0x26, " ms"));
     setting_field("TCP Timeout(Connecting)", numeric_value(image, 0x28, " ms"));
 
     std::ostringstream disconnect;
@@ -205,9 +209,10 @@ inline void show_parameters(const RegisterImage& image, bool xg) {
     setting_field("server IP", ip_value(image, xg ? 0x38 : 0x36));
     setting_field("server TCP port", numeric_value(image, xg ? 0x3C : 0x3A));
     std::cout << "\nControl settings:\n";
-    setting_field("control register", image.has(0x10, 1)
-          ? decimal_hex(image.bytes[0x10], 2)
-          : "unavailable (RBCP bus error)");
+    setting_field(
+        "control register", image.has(0x10, 1)
+                                ? decimal_hex(image.bytes[0x10], 2)
+                                : "unavailable (RBCP bus error)");
     control_flag(image, "reset bit", 0x80);
     if (xg) {
         control_flag(image, "window scaling", 0x10);
@@ -233,8 +238,9 @@ inline void show_parameters(const RegisterImage& image, bool xg) {
             setting_field("transmission rate", decimal_hex(rate) + " Mbps");
             setting_field("rate note", "configured line-rate limit; not measured throughput");
         } else {
-            setting_field("transmission rate raw", decimal_hex(rate) +
-                  " (outside documented range 1..10000)");
+            setting_field(
+                "transmission rate raw",
+                decimal_hex(rate) + " (outside documented range 1..10000)");
             setting_field("rate note", "raw value; may contain data unrelated to XG rate");
         }
     }
@@ -344,11 +350,12 @@ inline bool show(const std::string& host, uint16_t port, double timeout) {
     }
     field("MAC", mac_value(eeprom, 0x12));
     if (target_type == 1) {
-        field("MPCX FC00..FC0F", eeprom.has(0, 16)
-              ? hex_bytes(eeprom.bytes, 0, 16) : "unavailable");
+        field("MPCX FC00..FC0F",
+              eeprom.has(0, 16) ? hex_bytes(eeprom.bytes, 0, 16) : "unavailable");
     } else if (target_type == 2) {
-        field("MPC FC40..FC4F", eeprom.has(0x40, 16)
-              ? hex_bytes(eeprom.bytes, 0x40, 0x50) : "unavailable");
+        field("MPC FC40..FC4F",
+              eeprom.has(0x40, 16)
+                  ? hex_bytes(eeprom.bytes, 0x40, 0x50) : "unavailable");
     }
     const bool complete = runtime.has(0, runtime_length) && eeprom.has(0, 80);
     field("register report", complete ? "COMPLETE" : "PARTIAL (?? = unreadable)");

@@ -91,7 +91,7 @@ class WriterModeTests(unittest.TestCase):
                     self.assertEqual(p.returncode, 0 if xg else 7, p.stderr)
                     self.assertEqual(p.stdout,
                                      'MPC(X) File : Other\n  Interface : 10GbE\nDevice 127.0.0.1 : ' +
-                                     ('SiTCP XG - Matched' if xg else 'SiTCP 100/1000M - Mismatch') +
+                                     ('SiTCP XG - Matched' if xg else 'SiTCP 100/1000M - Mismatch.') +
                                      '\n' + ('EEOROM needs to be inbitialized.' if control else
                                              'EEPROM was already initialized') + '\n')
                     self.assertFalse(device.write_packets)

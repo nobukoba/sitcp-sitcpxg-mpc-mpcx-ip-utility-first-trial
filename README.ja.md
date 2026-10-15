@@ -178,7 +178,7 @@ IPは、設定を読み取れた場合は現在のランタイムIPです。読�
 保存IPが`192.168.10.16`となる正規版の固定設定を使用します。`--no-fallback`を指定すると書き込み前に停止します。
 別のIPを保存する場合は`--set-eeprom-ip`を指定してください。MPC書き込み成功後に自動で変更します。
 [追加オプションの詳細](FOR_DEVELOPERS.md#additional-options-reference)と
-[正規版との比較](FOR_DEVELOPERS.md#normal-mpc-fallback-native-execution-recheck-2026-10-15)を参照してください。
+[正規版との比較](docs/verification/2026-10-15-fallback.md#normal-mpc-fallback-native-execution-recheck-2026-10-15)を参照してください。
 
 ### EEPROM消去後のMPCX書き込み
 
@@ -254,4 +254,5 @@ make install PREFIX="$HOME/.local"
 ### 関連ドキュメント
 
 - [開発者向けガイド（英語）](FOR_DEVELOPERS.md) — 構成、ビルド/開発、技術的根拠、MPC/MPCXのEEPROM配置、装置の世代判定、参考資料、テスト。
+- [検証記録（英語）](docs/verification/README.md) — 日付別の試験条件・結果・復元確認・未検証項目。生キャプチャーやバックアップは非公開で管理します。
 - [AIエージェント向け指示（英語）](AGENTS.md) — 自動開発で守る制約。

@@ -29,6 +29,7 @@ Keep command names, option defaults, and output formatting consistent. All `--he
   MPC(X) File : Not Selected. and omit Interface and the match suffix.
   Preserve native spelling in the uninitialized message. Keep failure diagnostics
   and exit codes meaningful; fileless Check still succeeds on successful reads.
+  Normal SiTCP mismatch ends with `Mismatch.`; XG ends with `Mismatch`.
 - --initialize-eeprom requires file programming and forces XG preparation from
   complete safe RAM even when FC10 bit7 is clear. Normal MPC keeps its existing
   automatic rule; native checked-box capture on initialized normal MPC did not
@@ -87,6 +88,10 @@ Keep C++ source readable and conventionally formatted.
 - Do not compress multiple control-flow statements, declarations, or operations onto one long line.
 - Put function bodies, `if`/`else` branches, loops, and exception handling on normal separate lines.
 - Wrap long expressions and argument lists with consistent indentation.
+- Follow `.clang-format`'s 4-space indentation and 100-column limit. Keep a
+  final newline, consistent line endings within each file and no trailing spaces.
+- Splitting source string literals must preserve output text, section blank
+  lines and raw dumps; source wrapping must not introduce display newlines.
 - Prefer descriptive local variable names in public/refactored code over single-letter names except for small conventional loop indices.
 - Existing compressed legacy code should be reformatted as it is touched.
 - New code must not introduce minified or one-line C++ formatting.
@@ -156,7 +161,14 @@ Never commit proprietary MPC/MPCX files, official proprietary executables/librar
 Keep these documents synchronized with implementation changes:
 
 - `README.md` and `README.ja.md`: English and Japanese user-facing quick start and command usage. Keep both versions synchronized, preserve identical command examples, and maintain the `Language: English | 日本語` navigation at the top of each file.
-- `FOR_DEVELOPERS.md`: architecture, build/development notes, testing, implementation status, technical evidence, and reconstructed protocol/register behavior.
+- `FOR_DEVELOPERS.md`: current architecture, build/test instructions, option contracts,
+  register behavior, native differences and known limits. Link to dated evidence.
+- `docs/verification/`: sanitized dated test/investigation records, indexed by
+  [verification records](docs/verification/README.md). Include target/tool/revision,
+  conditions, results, restoration and untested paths. Preserve earlier evidence
+  when implementation changes; never present an old run as validation of new code.
+- Keep license-bearing raw logs/captures, EEPROM backups and proprietary tools
+  outside Git. Markdown verification records are distinct from private raw evidence.
 - `AGENTS.md`: constraints future automated development must preserve.
 
 Keep README content focused on installation and command usage, with direct Bee Beans Technologies reference links. Put source-formatting rules, shared-header architecture, register maps, and implementation provenance in `FOR_DEVELOPERS.md` or `AGENTS.md`, not the READMEs.

@@ -29,7 +29,7 @@ using Error = rbcp::Error;
 using RbcpClient = rbcp::Client;
 
 std::vector<uint8_t> read_exact(RbcpClient& client, uint32_t address,
-                                size_t length) {
+                               size_t length) {
     std::vector<uint8_t> data;
     for (size_t offset = 0; offset < length; offset += 8) {
         const size_t chunk_size = std::min<size_t>(8, length - offset);
@@ -41,7 +41,8 @@ std::vector<uint8_t> read_exact(RbcpClient& client, uint32_t address,
 }
 
 std::string hex_bytes(const std::vector<uint8_t>& data,
-                      size_t begin = 0, size_t end = static_cast<size_t>(-1),
+                      size_t begin = 0,
+                      size_t end = static_cast<size_t>(-1),
                       char separator = ' ') {
     end = std::min(end, data.size());
 
@@ -440,11 +441,13 @@ inline int run_mpc_mpcx_command(int argc, char** argv) {
                     sitcp_sitcpxg::eeprom_init::prepare_mpcx_image(
                         client, eeprom, payload, initialized);
                 field("command", "mpcx-plan");
-                field("EEPROM initialization", initialized
-                      ? "current RAM settings" : "not needed; preserve EEPROM");
+                field("EEPROM initialization",
+                      initialized ? "current RAM settings"
+                                  : "not needed; preserve EEPROM");
                 field("FC10..FC11 source", initialized ? "runtime" : "EEPROM");
-                field("write range", initialized
-                      ? "0xFFFFFC00..0xFFFFFC4F" : "0xFFFFFC00..0xFFFFFC17");
+                field("write range",
+                      initialized ? "0xFFFFFC00..0xFFFFFC4F"
+                                  : "0xFFFFFC00..0xFFFFFC17");
                 field("EEPROM record", hex_bytes(expected));
                 field("status", "NO WRITE PERFORMED");
                 return 0;

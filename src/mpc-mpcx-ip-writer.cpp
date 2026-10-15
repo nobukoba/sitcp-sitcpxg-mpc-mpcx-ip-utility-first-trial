@@ -16,6 +16,7 @@
 #include <vector>
 
 namespace {
+
 constexpr double DEFAULT_TIMEOUT = sitcp_sitcpxg::rbcp::DEFAULT_TIMEOUT;
 constexpr uint16_t DEFAULT_PORT = sitcp_sitcpxg::rbcp::DEFAULT_PORT;
 constexpr uint32_t EEPROM_BASE = 0xFFFFFC00u;
@@ -63,8 +64,8 @@ std::vector<uint8_t> read_exact(
 }
 
 void settle_eeprom_write() {
-    // Wait after the ACK as well: this conservatively guarantees at least
-    // 500 ms between writes, even when the previous transaction was slow.
+    // Wait 500 ms after the ACK, independently of transaction duration.
+    // Physical-wire timing remains dependent on the host and capture clock.
     std::this_thread::sleep_for(
         std::chrono::milliseconds(EEPROM_WRITE_SETTLE_MS));
 }
@@ -115,15 +116,16 @@ bool valid_tag(const std::vector<uint8_t>& tag) {
     return true;
 }
 
-std::vector<uint8_t> decode_nonzero(const std::vector<uint8_t>& d, size_t begin,
-                                    size_t len, uint8_t delta) {
-    std::vector<uint8_t> out;
-    out.reserve(len);
-    for (size_t i = 0; i < len; ++i) {
-        const uint8_t b = d[begin + i];
-        out.push_back(b ? static_cast<uint8_t>(b - delta) : 0);
+std::vector<uint8_t> decode_nonzero(
+    const std::vector<uint8_t>& data, size_t begin,
+    size_t length, uint8_t delta) {
+    std::vector<uint8_t> decoded;
+    decoded.reserve(length);
+    for (size_t i = 0; i < length; ++i) {
+        const uint8_t byte = data[begin + i];
+        decoded.push_back(byte ? static_cast<uint8_t>(byte - delta) : 0);
     }
-    return out;
+    return decoded;
 }
 
 int classify_payload(const std::vector<uint8_t>& data) {
@@ -139,21 +141,21 @@ int classify_payload(const std::vector<uint8_t>& data) {
     return 0;
 }
 
-int detect_target(RbcpClient& c, std::string& why) {
+int detect_target(RbcpClient& client, std::string& reason) {
     try {
-        const auto identifier = rbcp::read_retry(c, XG_IDENTIFIER, 4);
+        const auto identifier = rbcp::read_retry(client, XG_IDENTIFIER, 4);
         const std::vector<uint8_t> expected = {0x58, 0x54, 0x43, 0x50};
         if (identifier == expected) {
-            why = "SiTCP-XG identifier: 0x58544350";
+            reason = "SiTCP-XG identifier: 0x58544350";
             return 1;
         }
-        why = "SiTCP-XG identifier mismatch";
+        reason = "SiTCP-XG identifier mismatch";
         return 2;
     } catch (const RbcpBusError&) {
-        why = "SiTCP-XG identifier register: not supported";
+        reason = "SiTCP-XG identifier register: not supported";
         return 2;
     } catch (const RbcpTimeout&) {
-        why = "SiTCP-XG identifier register: timeout";
+        reason = "SiTCP-XG identifier register: timeout";
         return -1;
     }
 }
@@ -169,9 +171,10 @@ std::vector<uint8_t> read_file(const std::string& path) {
         std::istreambuf_iterator<char>());
 }
 
-void set_write_enable(RbcpClient& c, bool enabled) {
-    const auto ack = c.write(EEPROM_WRITE_ENABLE,
-                             {static_cast<uint8_t>(enabled ? 0x00 : 0xFF)});
+void set_write_enable(RbcpClient& client, bool enabled) {
+    const auto ack = client.write(
+        EEPROM_WRITE_ENABLE,
+        {static_cast<uint8_t>(enabled ? 0x00 : 0xFF)});
     settle_eeprom_write();
     if (ack.size() != 1) {
         throw RbcpError("unexpected RBCP ACK length for EEPROM write-enable");
@@ -241,14 +244,14 @@ std::vector<uint8_t> program(
         while (i < image.size() && actual[i] == image[i]) {
             ++i;
         }
-        std::ostringstream os;
-        os << "EEPROM read-back verification failed";
+        std::ostringstream message;
+        message << "EEPROM read-back verification failed";
         if (i < image.size()) {
-            os << " at 0x" << std::hex << (programming_base + i)
-               << ": expected 0x" << static_cast<unsigned>(image[i])
-               << ", got 0x" << static_cast<unsigned>(actual[i]);
+            message << " at 0x" << std::hex << (programming_base + i)
+                    << ": expected 0x" << static_cast<unsigned>(image[i])
+                    << ", got 0x" << static_cast<unsigned>(actual[i]);
         }
-        throw RbcpError(os.str());
+        throw RbcpError(message.str());
     }
     return actual;
 }
@@ -258,17 +261,21 @@ void usage(const char* argv0) {
               << "Options:\n"
               << "  --port N       RBCP UDP port (default: " << DEFAULT_PORT << ")\n"
               << "  --timeout SEC  RBCP timeout in seconds (default: " << DEFAULT_TIMEOUT << ")\n"
-              << "  --no-fallback        Stop if normal-MPC initialization RAM is unreadable (default: off)\n"
-              << "  --initialize-eeprom  Force XG initialization; normal MPC unchanged (default: off)\n"
+              << "  --no-fallback        Stop if normal-MPC initialization RAM is unreadable "
+                 "(default: off)\n"
+              << "  --initialize-eeprom  Force XG initialization; normal MPC unchanged "
+                 "(default: off)\n"
               << "  --write-chunk-size N  1..255 bytes, or official (default: official)\n"
               << "                        (default: entire image; use 16 to split)\n"
               << "  -h, --help     Show this help\n";
 }
-}
+}  // namespace
 
 inline int run_mpc_mpcx_writer(int argc, char** argv) {
     try {
-        if (argc == 2 && (std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help")) {
+        if (argc == 2 &&
+            (std::string(argv[1]) == "-h" ||
+             std::string(argv[1]) == "--help")) {
             usage(argv[0]);
             return 0;
         }
@@ -286,29 +293,29 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
         bool force_initialization = false;
 
         for (int i = 3; i < argc; ++i) {
-            const std::string a = argv[i];
-            if (a == "--port" && i + 1 < argc) {
-                const unsigned long p = std::stoul(argv[++i]);
-                if (p == 0 || p > 65535) {
+            const std::string option = argv[i];
+            if (option == "--port" && i + 1 < argc) {
+                const unsigned long value = std::stoul(argv[++i]);
+                if (value == 0 || value > 65535) {
                     throw std::runtime_error("invalid port");
                 }
-                port = static_cast<uint16_t>(p);
-            } else if (a == "--timeout" && i + 1 < argc) {
+                port = static_cast<uint16_t>(value);
+            } else if (option == "--timeout" && i + 1 < argc) {
                 timeout = std::stod(argv[++i]);
                 if (timeout <= 0) {
                     throw std::runtime_error("timeout must be positive");
                 }
-            } else if (a == "--no-fallback") {
+            } else if (option == "--no-fallback") {
                 allow_fallback = false;
-            } else if (a == "--initialize-eeprom") {
+            } else if (option == "--initialize-eeprom") {
                 force_initialization = true;
-            } else if (a == "--write-chunk-size" && i + 1 < argc) {
+            } else if (option == "--write-chunk-size" && i + 1 < argc) {
                 write_chunk_size = parse_write_chunk_size(argv[++i]);
-            } else if (a == "-h" || a == "--help") {
+            } else if (option == "-h" || option == "--help") {
                 usage(argv[0]);
                 return 0;
             } else {
-                throw std::runtime_error("unknown option: " + a);
+                throw std::runtime_error("unknown option: " + option);
             }
         }
 
@@ -341,12 +348,11 @@ inline int run_mpc_mpcx_writer(int argc, char** argv) {
         program(client, payload, file_type, eeprom, write_chunk_size,
                 allow_fallback, force_initialization);
         return 0;
-    } catch (const std::exception& e) {
-        std::cerr << "ERROR: " << e.what() << "\n";
+    } catch (const std::exception& error) {
+        std::cerr << "ERROR: " << error.what() << "\n";
         return 1;
     }
 }
-
 
 namespace {
 
@@ -389,11 +395,16 @@ int check_device(const std::string& host, const std::string& file,
               << (target_type == 1 ? "SiTCP XG" : "SiTCP 100/1000M");
     if (!file.empty()) {
         std::cout << (file_type == target_type ? " - Matched" : " - Mismatch");
+        if (file_type != target_type && target_type == 2) {
+            std::cout << '.';
+        }
     }
     // Preserve the native GUI's wording, including its uninitialized-state typo.
-    std::cout << '\n' << ((control[0] & 0x80u) != 0
-              ? "EEOROM needs to be inbitialized."
-              : "EEPROM was already initialized") << '\n';
+    std::cout << '\n'
+              << ((control[0] & 0x80u) != 0
+                      ? "EEOROM needs to be inbitialized."
+                      : "EEPROM was already initialized")
+              << '\n';
     return !file.empty() && file_type != target_type ? 7 : 0;
 }
 
@@ -410,17 +421,21 @@ void unified_usage(const char* program) {
         << "runtime FF18..FF3F if the first/last EEPROM IP octets are FF.\n"
         << "Unreadable normal-MPC runtime uses official defaults (IP 192.168.10.16).\n\n"
         << "Options:\n"
-        << "  --check              Read-only target/EEPROM flag check; optional file type match (default: off)\n"
+        << "  --check              Read-only target/EEPROM flag check; "
+           "optional file type match (default: off)\n"
         << "  --initialize-eeprom  Force XG RAM-to-EEPROM initialization (default: off)\n"
-        << "                       Requires a file; normal MPC keeps its automatic rule, as native GUI\n"
+        << "                       Requires a file; normal MPC keeps its automatic rule, "
+           "as native GUI\n"
         << "  --clear              Clear only: erase EEPROM FC00..FC7F (default: off)\n"
         << "                       Deletes license/settings; no file or IP changes allowed\n"
         << "  --set-eeprom-ip IP   Set EEPROM/default IP address\n"
         << "  --set-current-ip IP  Set current/runtime IP address\n"
-        << "  --no-fallback       Stop on unreadable normal-MPC initialization RAM (default: off)\n"
+        << "  --no-fallback       Stop on unreadable normal-MPC initialization RAM "
+           "(default: off)\n"
         << "  --write-chunk-size N 1..255 bytes, or official (default: official)\n"
         << "                       (default: entire image; MPC 64, MPCX 24 or 80 bytes)\n"
-        << "                       Use official for native lengths, 16 to split; not valid with --clear\n"
+        << "                       Use official for native lengths, 16 to split; "
+           "not valid with --clear\n"
         << "  --port N             RBCP UDP port (default: "
         << sitcp_sitcpxg::network_config::DEFAULT_PORT << ")\n"
         << "  --timeout SEC        RBCP timeout in seconds (default: "
@@ -509,7 +524,7 @@ int main(int argc, char** argv) {
                 "--clear is clear-only; do not specify a file, IP changes or programming options");
         }
         if (check_only && (has_eeprom_ip || has_current_ip || has_chunk_option ||
-                           !allow_fallback || force_initialization)) {
+                          !allow_fallback || force_initialization)) {
             throw std::runtime_error("--check is read-only; no programming options allowed");
         }
         if (!clear_only && !check_only && !has_file) {
@@ -562,12 +577,14 @@ int main(int argc, char** argv) {
         }
 
         if (has_eeprom_ip) {
-            sitcp_sitcpxg::network_config::write_eeprom_ip(host, eeprom_ip, port, timeout);
+            sitcp_sitcpxg::network_config::write_eeprom_ip(
+                host, eeprom_ip, port, timeout);
         }
 
         std::string final_host = host;
         if (has_current_ip) {
-            sitcp_sitcpxg::network_config::write_current_ip(host, current_ip, port, timeout);
+            sitcp_sitcpxg::network_config::write_current_ip(
+                host, current_ip, port, timeout);
             final_host = current_ip;
         }
 
