@@ -171,7 +171,7 @@ for register evidence, failure behavior and validation scope.
 The standalone IP writer can set IP, TCP data port and UDP/RBCP port together:
 
 ```bash
-./bin/sitcp-sitcpxg-ip-writer 192.168.2.187 192.168.2.188 --eeprom --tcp-port 24 --udp-port 4660
+./bin/sitcp-sitcpxg-ip-writer 192.168.2.187 192.168.2.188 --tcp-port 24 --udp-port 4660
 ```
 
 `--tcp-port N` and `--udp-port N` accept 1..65535; the default is to preserve

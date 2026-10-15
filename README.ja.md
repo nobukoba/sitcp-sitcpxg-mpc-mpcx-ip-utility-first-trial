@@ -161,7 +161,7 @@ CLIもこれに合わせ、このフラグは通常MPCの動作を変更しま�
 単独IPライターでIP、TCPデータポート、UDP/RBCPポートをまとめて設定できます。
 
 ```bash
-./bin/sitcp-sitcpxg-ip-writer 192.168.2.187 192.168.2.188 --eeprom --tcp-port 24 --udp-port 4660
+./bin/sitcp-sitcpxg-ip-writer 192.168.2.187 192.168.2.188 --tcp-port 24 --udp-port 4660
 ```
 
 `--tcp-port N`と`--udp-port N`は1～65535を指定でき、省略時は既存値を保持します。
